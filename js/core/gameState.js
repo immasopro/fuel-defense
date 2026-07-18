@@ -1,0 +1,26 @@
+export const Game = {
+  state: 'menu',
+  mode: 'campaign', levelIdx: 1, modeCfg: null,
+  money: 0, time: 0,
+  depot: { level: 1, res: 1500, cap: 1500 },
+  tankerTruck: { level: 1 },
+  fleet: { level: 1 },
+  gbrBase: { level: 1 },
+  gbrLogistics: null,
+  vehicles: [], holder: [], holderPriorityWait: null, prepared: null, floats: [],
+  spawnTimer: 0, defeatT: 0,
+  light: { phase: 'green', redT: 0, cd: 0 },
+  scalperTimer: 0,
+  tanker: { unit: null },
+  gbr: { unit: null },
+  pursuitEventLog: [],
+  scalper: { unit: null },
+  scalperEvolution: null,
+  stats: { served: 0, earned: 0, liters: 0, stolenLiters: 0, stolenDamage: 0 },
+  tankLabels: {},   // slot.i → seconds left showing "XXXX / YYYY л"
+  depotLabel: 0,
+  paused: false,
+  menuOpen: false,
+  menuReturnAfterManual: false,
+  defeatReason: null
+};

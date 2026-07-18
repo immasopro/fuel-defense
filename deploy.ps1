@@ -1,0 +1,1 @@
+scp -r "C:\gmdvk\fuel_defense\*" root@31.59.139.108:/var/www/fuel-defense/

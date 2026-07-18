@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#10141a">
+<title>Fuel Defense v0.3.5.2</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <button id="btn-fs" type="button">⛶</button>
+    <button id="btn-menu-hud" type="button" title="Меню">☰</button>
+    <button id="btn-help" type="button" title="Справка">?</button>
+    <button id="btn-debug" type="button">DBG</button>
+    <div id="warning" class="hidden"></div>
+    <div id="panel" class="hidden"></div>
+  </div>
+  <div id="hud">
+    <div id="stats">
+      <div class="stat" id="stat-money">💰 0</div>
+      <div class="stat" id="stat-traffic">🚗 —</div>
+      <div class="stat" id="stat-time">⏱ —</div>
+    </div>
+    <div id="actions">
+      <button class="act-btn" id="btn-light"><span class="t">🚦 Светофор</span><span class="sub" id="light-sub">—</span></button>
+      <button class="act-btn" id="btn-tanker"><span class="t">🛢 Бензовоз</span><span class="sub">—</span></button>
+      <button class="act-btn" id="btn-gbr"><span class="t">🚨 ГБР</span><span class="sub">—</span></button>
+    </div>
+  </div>
+</div>
+
+<div id="game-menu" class="game-menu hidden">
+  <div class="game-menu-backdrop" id="game-menu-backdrop"></div>
+  <div class="game-menu-dialog" role="dialog" aria-label="Меню игры">
+    <h2 class="game-menu-title">Меню</h2>
+    <div id="menu-main-buttons" class="menu-main-buttons">
+      <button type="button" class="menu-btn" id="menu-btn-continue">Продолжить</button>
+      <button type="button" class="menu-btn menu-btn-ghost" id="menu-btn-restart">Рестарт</button>
+      <button type="button" class="menu-btn menu-btn-ghost" id="menu-btn-manual">Мануал</button>
+      <button type="button" class="menu-btn menu-btn-ghost" id="menu-btn-home">Главное меню</button>
+    </div>
+    <div id="menu-restart-confirm" class="menu-restart-confirm hidden" role="dialog" aria-label="Подтверждение рестарта">
+      <p class="menu-restart-text">Начать уровень заново? Весь прогресс текущего уровня будет потерян.</p>
+      <div class="menu-restart-actions">
+        <button type="button" class="menu-btn" id="menu-restart-yes">Да</button>
+        <button type="button" class="menu-btn menu-btn-ghost" id="menu-restart-no">Нет</button>
+      </div>
+    </div>
+    <div id="menu-update" class="menu-update hidden"></div>
+  </div>
+</div>
+
+<div id="manual" class="manual hidden">
+  <div class="manual-backdrop" id="manual-backdrop"></div>
+  <div class="manual-dialog" role="dialog" aria-label="Справка">
+    <button id="manual-close" type="button" class="manual-close" aria-label="Закрыть">✕</button>
+    <div id="manual-body" class="manual-scroll"></div>
+    <footer class="manual-footer">
+      <div id="manual-version" class="manual-ver"></div>
+      <div id="manual-changelog" class="manual-changelog"></div>
+    </footer>
+  </div>
+</div>
+
+<div class="screen" id="screen-start">
+  <h1>⛽ FUEL <span class="accent">DEFENSE</span></h1>
+  <p class="version-line" id="game-version"></p>
+  <div id="patch-notes" class="patch-notes"></div>
+  <p class="menu-desc">Строй АЗС вдоль кольцевой дороги. Кнопка светофора внизу экрана останавливает поток на 10 секунд.
+     Быстрые машины обгоняют, но могут проскочить мимо колонки.</p>
+  <p class="legend">
+    <span class="dot" style="background:#2e7d32"></span>Светофор в HUD — красный 10с, перезарядка 60с<br>
+    <span class="dot" style="background:#5c6bc0"></span>Нефтебаза — источник топлива для всех АЗС<br>
+    <span class="dot" style="background:#4caf50"></span>АИ-92 &nbsp;
+    <span class="dot" style="background:#42a5f5"></span>АИ-95 &nbsp;
+    <span class="dot" style="background:#ff9800"></span>Дизель<br>
+    <span class="dot" style="background:#ab47bc"></span>Перекуп — тур по АЗС, блокирует колонки<br>
+    <span class="dot" style="background:#fdd835"></span>Бензовоз — объезжает все АЗС, возвращается на базу
+  </p>
+  <h2>КАМПАНИЯ</h2>
+  <div id="level-row"></div>
+  <h2>или</h2>
+  <button class="big-btn alt" id="btn-endless">∞ БЕСКОНЕЧНЫЙ РЕЖИМ</button>
+  <p class="build-footer" id="build-footer"></p>
+</div>
+
+<div class="screen hidden" id="screen-end">
+  <h1 id="end-title"></h1>
+  <p id="end-desc"></p>
+  <div id="end-stats"></div>
+  <div id="end-actions">
+    <button class="big-btn hidden" id="btn-next">СЛЕДУЮЩИЙ УРОВЕНЬ ▶</button>
+    <button class="big-btn" id="btn-restart">ЕЩЁ РАЗ</button>
+    <button class="big-btn ghost" id="btn-menu">В МЕНЮ</button>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
