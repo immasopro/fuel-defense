@@ -1,7 +1,8 @@
 {
-  "version": "0.4.1",
+  "version": "0.4.2.3",
   "notes": [
-    "Flexible tanker fuel order + bonus cashback",
-    "Start money 50000"
+    "Campaign spawn budget: regular cars <= targetCars",
+    "Scalper excluded from spawn budget and served",
+    "Persist spawned/served across reload"
   ]
 }

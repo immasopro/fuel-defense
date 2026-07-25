@@ -3,7 +3,7 @@ import { Game } from '../core/gameState.js';
 import { fmtTime } from '../core/utils.js';
 import { fmtRub } from '../core/currency.js';
 import { getTargetCars, hasLevelTarget } from './spawnSystem.js';
-import { quoteFuelOrder } from './fuelOrderSystem.js';
+import { quoteFuelOrder, canAffordFuelOrder } from './fuelOrderSystem.js';
 import { hasActiveTankerDelivery, hasReadyTanker } from './tankerLogistics.js';
 import { sortedStationSlots } from '../world/map.js';
 import { innerLaneList, spawnClear, isLightGreen } from './trafficSystem.js';
@@ -46,8 +46,8 @@ function isTankerCreditBlocked() {
   if (hasActiveTankerDelivery()) return false;
   if (!sortedStationSlots().length) return true;
   const minQuote = quoteFuelOrder(20);
-  // v0.4.1: заказ через меню требует деньги ≥ стоимости (без кредита)
-  const cannotPay = Game.money < minQuote.cost;
+  // v0.4.2.2: та же кредитная политика, что меню/callTanker (canOrderTanker)
+  const cannotPay = !canAffordFuelOrder(minQuote);
   if (hasReadyTanker()) return cannotPay;
   const hasQueued = Game.logistics?.trucks.some(t =>
     t.state === 'PREPARING' || t.state === 'WAIT_PREPARING');
