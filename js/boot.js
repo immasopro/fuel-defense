@@ -19,6 +19,32 @@ import { isEndlessUnlocked } from './systems/campaignSave.js';
 import { CAMPAIGN_LEVEL_COUNT } from './config/levels.js';
 let eventsBound = false;
 
+function isNativeApp() {
+  try {
+    const C = globalThis.Capacitor;
+    return !!(C && typeof C.isNativePlatform === 'function' && C.isNativePlatform());
+  } catch {
+    return false;
+  }
+}
+
+/** Нативный immersive fullscreen + скрытие браузерной кнопки ⛶ в APK. */
+async function applyNativeFullscreen() {
+  if (!isNativeApp()) return;
+  document.documentElement.classList.add('fd-native');
+  const btnFs = document.getElementById('btn-fs');
+  if (btnFs) btnFs.classList.add('hidden');
+  try {
+    const StatusBar = globalThis.Capacitor?.Plugins?.StatusBar;
+    if (StatusBar) {
+      if (StatusBar.setOverlaysWebView) await StatusBar.setOverlaysWebView({ overlay: true });
+      if (StatusBar.hide) await StatusBar.hide();
+    }
+  } catch {
+    /* native MainActivity already enforces immersive mode */
+  }
+}
+
 function destroy() {
   closePanel();
   if (UI.screenEnd) UI.screenEnd.classList.add('hidden');
@@ -60,11 +86,14 @@ function bindEvents() {
     }
   });
   bindTap(document.getElementById('btn-menu'), () => showMenu());
-  bindTap(document.getElementById('btn-fs'), () => {
-    const el = document.documentElement;
-    if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen();
-    else if (document.exitFullscreen) document.exitFullscreen();
-  });
+  const btnFs = document.getElementById('btn-fs');
+  if (btnFs && !isNativeApp()) {
+    bindTap(btnFs, () => {
+      const el = document.documentElement;
+      if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen();
+      else if (document.exitFullscreen) document.exitFullscreen();
+    });
+  }
   bindTap(document.getElementById('btn-debug'), () => {
     const on = toggleDebugOverlay();
     const btn = document.getElementById('btn-debug');
@@ -139,6 +168,7 @@ function initDom() {
 export const Boot = {
   start(startFrame) {
     initDom();
+    applyNativeFullscreen();
     bindEvents();
     renderMenu();
     updateHUD();

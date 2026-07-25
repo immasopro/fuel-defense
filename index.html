@@ -9,6 +9,16 @@
 <meta name="color-scheme" content="dark">
 <title>Fuel Defense v0.4.1</title>
 <link rel="stylesheet" href="css/style.css">
+<script>
+(function () {
+  try {
+    var C = window.Capacitor;
+    if (C && typeof C.isNativePlatform === 'function' && C.isNativePlatform()) {
+      document.documentElement.classList.add('fd-native');
+    }
+  } catch (e) {}
+})();
+</script>
 </head>
 <body>
 <div id="app">

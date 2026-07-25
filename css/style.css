@@ -83,6 +83,12 @@ html,body{height:100%;width:100%;overflow:hidden;position:fixed;background:#161b
 #btn-debug.active{background:#1b5e20;border-color:#66bb6a;color:#fff}
 #btn-fs:active{transform:scale(.96);filter:brightness(1.25)}
 
+/* APK / Capacitor: ???????? immersive fullscreen ? ?????? ??????????? FS ?????? */
+html.fd-native #btn-fs{display:none!important}
+html.fd-native #btn-debug{right:8px}
+html.fd-native #btn-help{right:calc(58px * var(--ui-scale))}
+html.fd-native #btn-menu-hud{right:calc(108px * var(--ui-scale))}
+
 /* ---- всплывающая панель (постройка / улучшение) ---- */
 #panel{position:absolute;left:8px;right:8px;bottom:8px;background:rgba(24,30,39,.97);
   border:1px solid #39404b;border-radius:16px;padding:12px;z-index:6;
