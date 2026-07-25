@@ -56,7 +56,7 @@ export const balance = {
   /** Себестоимость закупки топлива, ₽/л (базовая; гибкий заказ — см. fuelOrder) */
   fuelCostPerLiter: 70,
 
-  /** Гибкий заказ бензовоза (v0.4.2) */
+  /** Гибкий заказ бензовоза (v0.4.2+) */
   fuelOrder: {
     percents: [20, 30, 40, 50, 60, 70, 80, 90, 100],
     pricePerLiter: {
@@ -69,6 +69,19 @@ export const balance = {
     /** v0.4.2: до 100% стоимости улучшения можно оплатить бонусами */
     bonusShareStation: 1,
     bonusShareDepot: 1
+  },
+
+  /**
+   * Аварийный обмен бонусов на деньги (v0.4.2.1).
+   * Курс 2 бонуса = 1 ₽; только фиксированные пакеты. Магазин — отдельное ТЗ.
+   */
+  bonusExchange: {
+    rate: 2,
+    packs: [
+      { id: 'small', bonuses: 10000, money: 5000 },
+      { id: 'medium', bonuses: 50000, money: 25000 },
+      { id: 'large', bonuses: 100000, money: 50000 }
+    ]
   },
 
   depot: {

@@ -3,6 +3,7 @@
 import { CONFIG } from '../config/index.js';
 import { Game } from '../core/gameState.js';
 import { tankerTruckCapacity } from './economySystem.js';
+import { saveRunEconomy } from './runEconomySave.js';
 
 export function normalizeOrderPercent(pct) {
   const list = CONFIG.fuelOrder.percents;
@@ -46,6 +47,7 @@ export function addBonuses(amount) {
   if (!(amount > 0)) return;
   ensureBonusBalance();
   Game.bonuses += Math.round(amount);
+  saveRunEconomy();
 }
 
 /** Макс. бонусов, которые можно потратить на улучшение: min(баланс, стоимость). */
@@ -86,6 +88,7 @@ export function payWithBonus(cost, share) {
   const cash = Math.round(cost) - bonus;
   Game.money -= cash;
   Game.bonuses = (Game.bonuses || 0) - bonus;
+  saveRunEconomy();
   return { ok: true, cash, bonus };
 }
 
@@ -102,6 +105,7 @@ export function payUpgrade(cost, bonusSpend) {
   if (Game.money < cash) return { ok: false, cash: 0, bonus: 0 };
   Game.money -= cash;
   Game.bonuses -= bonus;
+  saveRunEconomy();
   return { ok: true, cash, bonus };
 }
 

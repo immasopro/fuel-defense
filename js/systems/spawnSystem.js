@@ -18,6 +18,7 @@ import {
   canDispatchGbr, gbrCallCost
 } from './gbrLogistics.js';
 import { manualCallGbr } from './gbrPursuit.js';
+import { saveRunEconomy } from './runEconomySave.js';
 
 function hasLevelTarget() {
   return Game.mode === 'campaign';
@@ -138,6 +139,7 @@ function callTanker(order) {
   if (bonuses > 0) {
     Game.bonuses = (Game.bonuses || 0) + bonuses;
   }
+  saveRunEconomy();
   const t = makeTanker(truck.id, liters);
   setTankerPhase(t, TankerPhase.SPAWNING);
   addToHolder(t, { priority: true, countsForDefeat: false });

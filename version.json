@@ -1,8 +1,8 @@
 {
-  "version": "0.4.2",
+  "version": "0.4.2.1",
   "notes": [
-    "Adaptive UI safe zone for chrome buttons",
-    "Bonus HUD panel + 3/5/7% cashback",
-    "Upgrade payment slider up to 100% bonuses"
+    "Emergency bonus-to-cash exchange at 2:1",
+    "Fixed packs 10k/50k/100k bonuses",
+    "Bonus account menu from HUD tally"
   ]
 }

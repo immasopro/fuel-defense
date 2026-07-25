@@ -805,9 +805,9 @@ assert(despawnLog, 'Despawn complete logged');
 // version check
 const { compareVersions, isNewerVersion, GAME_VERSION, hasPendingUpdate, _setRemoteVersionForTest } =
   await import('./js/systems/versionCheck.js');
-assert(GAME_VERSION === '0.4.2', 'GAME_VERSION 0.4.2');
-assert(compareVersions('0.4.2', '0.4.1') > 0, 'semver newer');
-assert(!isNewerVersion('0.4.2'), 'same version not newer');
+assert(GAME_VERSION === '0.4.2.1', 'GAME_VERSION 0.4.2.1');
+assert(compareVersions('0.4.2.1', '0.4.2') > 0, 'semver newer');
+assert(!isNewerVersion('0.4.2.1'), 'same version not newer');
 assert(isNewerVersion('0.4.3'), '0.4.3 is newer');
 _setRemoteVersionForTest({ version: '0.4.3', notes: ['Тест'] });
 assert(hasPendingUpdate(), 'pending update detected');
@@ -881,7 +881,7 @@ assert(Game.time > 0, 'game advances after rAF frames');
 globalThis.window.requestAnimationFrame = prevRaf;
 
 const { GameVersion } = await import('./js/config/gameVersion.js');
-assert(GameVersion.version === '0.4.2', 'GameVersion is 0.4.2');
+assert(GameVersion.version === '0.4.2.1', 'GameVersion is 0.4.2.1');
 assert(GameVersion.changes.length <= 8, 'patch notes capped at 8 items');
 
 const { StationApi } = await import('./js/systems/stationApi.js');
@@ -1205,10 +1205,60 @@ assert(migrated.tankerTruck.level === 1, 'migration tanker level I');
 assert(migrated.fleet.level === 1, 'migration fleet level I');
 assert(migrated.depot.res <= migrated.depot.cap, 'migration clamps fuel');
 assert(isNewerVersion('0.4.3'), 'semver newer');
-assert(!isNewerVersion('0.4.2'), 'same version not newer');
+assert(!isNewerVersion('0.4.2.1'), 'same version not newer');
 _resetVersionNotificationForTest();
-showVersionNotification('0.4.2');
+showVersionNotification('0.4.2.1');
 assert(true, 'version notification once per session');
+
+// v0.4.2.1 — аварийный обмен бонусов
+const { listExchangePacks, canExchangePack, exchangeBonusPack, getExchangePack, getExchangeRate } =
+  await import('./js/systems/bonusExchange.js');
+const { saveRunEconomy, readRunEconomy, clearRunEconomy, tryRestoreRunEconomy, markResumePending,
+  consumeResumePending } = await import('./js/systems/runEconomySave.js');
+assert(getExchangeRate() === 2, 'exchange rate 2:1');
+assert(CONFIG.bonusExchange.packs.length === 3, 'three exchange packs');
+FD.newGame('campaign', 1);
+Game.bonuses = 9999;
+let packs = listExchangePacks();
+assert(!packs[0].available && !packs[1].available && !packs[2].available, '9999: all packs locked');
+Game.bonuses = 10000;
+packs = listExchangePacks();
+assert(packs[0].available && !packs[1].available && !packs[2].available, '10000: only small');
+Game.bonuses = 49999;
+packs = listExchangePacks();
+assert(packs[0].available && !packs[1].available, '49999: medium locked');
+Game.bonuses = 120000;
+Game.money = -5000;
+packs = listExchangePacks();
+assert(packs.every(p => p.available), '120000: all packs open');
+const big = exchangeBonusPack('large');
+assert(big.ok && big.bonusesSpent === 100000 && big.moneyGained === 50000, 'large pack 100k→50k');
+assert(Game.bonuses === 20000 && Game.money === 45000, 'remainder 20k bonuses; money -5k+50k');
+const mid = exchangeBonusPack('medium');
+assert(!mid.ok, 'medium blocked with 20k left');
+const small = exchangeBonusPack('small');
+assert(small.ok && Game.bonuses === 10000 && Game.money === 50000, 'second exchange small pack');
+assert(!canExchangePack(getExchangePack('small'), 9999), 'canExchangePack false under cost');
+assert(document.getElementById('bonus-account'), 'bonus account dialog exists');
+assert(document.getElementById('bonus-exchange-confirm'), 'exchange confirm dialog exists');
+
+// save / resume economy after exchange
+clearRunEconomy();
+FD.newGame('campaign', 1);
+Game.money = 12345;
+Game.bonuses = 67890;
+saveRunEconomy();
+const snap = readRunEconomy();
+assert(snap && snap.money === 12345 && snap.bonuses === 67890, 'economy snapshot written');
+markResumePending();
+const resume = consumeResumePending();
+assert(resume && resume.bonuses === 67890, 'resume flag consumed once');
+assert(consumeResumePending() == null, 'resume flag single-use');
+FD.newGame('campaign', 1);
+assert(Game.money === 50000 && Game.bonuses === 0, 'fresh newGame defaults');
+assert(tryRestoreRunEconomy(), 'restore same level economy');
+assert(Game.money === 12345 && Game.bonuses === 67890, 'money/bonuses restored after reload path');
+clearRunEconomy();
 
 // v0.3.1.1 — UX бензовозов и подготовка после возврата
 const { tankerButtonSub, onTankerMissionComplete, nearestTankerPrepSeconds,

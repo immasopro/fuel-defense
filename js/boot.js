@@ -14,10 +14,14 @@ import { initManualUi } from './ui/manual.js';
 import { initGameMenuUi } from './ui/gameMenu.js';
 import { initTankerOrderUi, openTankerOrderMenu } from './ui/tankerOrderMenu.js';
 import { initUpgradePaymentUi } from './ui/upgradePaymentMenu.js';
+import { initBonusAccountUi } from './ui/bonusAccountMenu.js';
 import { checkForUpdate, isNewerVersion } from './systems/versionCheck.js';
 import { showVersionNotification } from './ui/versionNotification.js';
 import { isEndlessUnlocked } from './systems/campaignSave.js';
 import { CAMPAIGN_LEVEL_COUNT } from './config/levels.js';
+import {
+  clearRunEconomy, consumeResumePending, markResumePending, tryRestoreRunEconomy, saveRunEconomy
+} from './systems/runEconomySave.js';
 let eventsBound = false;
 
 function isNativeApp() {
@@ -107,6 +111,9 @@ function bindEvents() {
   initGameMenuUi(bindTap);
   initTankerOrderUi();
   initUpgradePaymentUi();
+  initBonusAccountUi(bindTap);
+  window.addEventListener('pagehide', () => markResumePending());
+  window.addEventListener('beforeunload', () => markResumePending());
 }
 
 function initDom() {
@@ -178,16 +185,27 @@ export const Boot = {
     checkForUpdate().then(info => {
       if (info && isNewerVersion(info.version)) showVersionNotification(info.version);
     });
+    // После reload/закрытия APK — восстановить money/bonuses того же уровня
+    const resume = consumeResumePending();
+    if (resume && (resume.mode === 'campaign' || resume.mode === 'endless')) {
+      markVersionSeen();
+      if (UI.screenStart) UI.screenStart.classList.add('hidden');
+      Boot.startLevel(resume.mode, resume.levelIdx, { resumeEconomy: true });
+    }
     startFrame(0);
   },
 
-  startLevel(mode, levelIdx) {
+  startLevel(mode, levelIdx, opts) {
     destroy();
+    if (!opts?.resumeEconomy) clearRunEconomy();
     newGame(mode, levelIdx);
+    if (opts?.resumeEconomy) tryRestoreRunEconomy();
+    saveRunEconomy();
     updateHUD();
   },
 
   restart() {
+    clearRunEconomy();
     restartCurrentLevel();
   },
 

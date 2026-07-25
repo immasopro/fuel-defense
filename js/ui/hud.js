@@ -13,6 +13,7 @@ import { ensureBonusBalance } from '../systems/fuelOrderSystem.js';
 import {
   getUnlocked, setUnlocked, migrateCampaignSave, isEndlessUnlocked, getEndlessBest
 } from '../systems/campaignSave.js';
+import { clearRunEconomy } from '../systems/runEconomySave.js';
 
 export const UI = {};
 
@@ -260,6 +261,7 @@ function renderPatchNotes() {
 
 function showMenu() {
   Game.state = 'menu';
+  clearRunEconomy();
   renderMenu();
   UI.screenEnd.classList.add('hidden');
   UI.screenStart.classList.remove('hidden');
