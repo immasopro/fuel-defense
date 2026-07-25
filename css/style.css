@@ -1,20 +1,38 @@
+/* DPI / density: --ui-scale ???????????? ?? js/ui/hud.js::resize() */
+:root{
+  --ui-scale:1;
+  --dpr:1;
+  --fs-stat:calc(14px * var(--ui-scale));
+  --fs-btn:calc(16px * var(--ui-scale));
+  --fs-btn-sub:calc(12px * var(--ui-scale));
+  --btn-min-h:calc(60px * var(--ui-scale));
+  --hud-pad:calc(8px * var(--ui-scale));
+  --tap-min:calc(44px * var(--ui-scale));
+}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;width:100%;overflow:hidden;position:fixed;background:#161b22;
   font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#e6edf3;
-  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-#app{display:flex;flex-direction:column;height:100%}
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
+  -webkit-text-size-adjust:100%;text-size-adjust:100%}
+#app{display:flex;flex-direction:column;height:100%;height:100dvh}
+/* UI-???? ??? ?????????? ? ?? ??????????? ??????? ????? */
+#top-bar{
+  flex:0 0 auto;display:flex;justify-content:flex-end;align-items:center;
+  padding:calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  padding-top:calc(6px * var(--ui-scale) + env(safe-area-inset-top));
+  background:#10141a;border-bottom:1px solid #2d333b;z-index:4}
+#top-bar-actions{display:flex;gap:calc(6px * var(--ui-scale));align-items:center}
 #stage{flex:1;position:relative;min-height:0}
 #cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
 
 /* ---- предупреждение о блокировке въезда ---- */
-#warning{position:absolute;top:calc(10px + env(safe-area-inset-top));left:50%;
+#warning{position:absolute;top:10px;left:50%;
   transform:translateX(-50%);background:#c62828;padding:9px 16px;border-radius:12px;
   font-weight:800;font-size:14px;white-space:nowrap;z-index:5;
   animation:blink .45s steps(2) infinite;box-shadow:0 2px 14px #000a}
 @keyframes blink{50%{opacity:.35}}
 
-/* ---- уведомление о новой версии ---- */
-.version-notification{position:absolute;top:calc(10px + env(safe-area-inset-top));left:10px;
+.version-notification{position:absolute;top:10px;left:10px;
   z-index:6;pointer-events:none;padding:8px 12px;border-radius:8px;
   background:rgba(16,20,26,.82);color:#fff;font-size:13px;line-height:1.35;
   max-width:min(240px,42vw);opacity:0;transition:opacity .3s ease}
@@ -36,40 +54,59 @@ html,body{height:100%;width:100%;overflow:hidden;position:fixed;background:#161b
 
 /* ---- HUD (низ экрана, зона большого пальца) ---- */
 #hud{background:#10141a;border-top:1px solid #2d333b;
-  padding:8px 10px calc(10px + env(safe-area-inset-bottom));
-  display:flex;flex-direction:column;gap:8px}
-#stats{display:flex;gap:6px;font-size:14px;font-weight:700}
-.stat{background:#1c222b;border-radius:9px;padding:7px 4px;flex:1;text-align:center;white-space:nowrap;overflow:hidden}
-#actions{display:flex;gap:10px}
-.act-btn{flex:1;min-height:60px;border:none;border-radius:14px;font:inherit;font-size:16px;
+  padding:var(--hud-pad) calc(10px * var(--ui-scale)) calc(10px * var(--ui-scale) + env(safe-area-inset-bottom));
+  display:flex;flex-direction:column;gap:calc(8px * var(--ui-scale))}
+#stats{display:grid;grid-template-columns:1fr 1fr;gap:calc(6px * var(--ui-scale));font-size:var(--fs-stat);font-weight:700}
+.stat{background:#1c222b;border-radius:9px;padding:calc(7px * var(--ui-scale)) 4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat-bonus{background:#2a1f14;border:1px solid #ffb300;color:#ffd54f}
+#actions{display:flex;gap:calc(10px * var(--ui-scale))}
+.act-btn{flex:1;min-height:var(--btn-min-h);border:none;border-radius:14px;font:inherit;font-size:var(--fs-btn);
   font-weight:800;color:#fff;background:#2d5be3;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:2px;touch-action:manipulation;cursor:pointer}
-.act-btn .sub{font-size:12px;font-weight:600;opacity:.9;white-space:pre-line;line-height:1.25}
+.act-btn .sub{font-size:var(--fs-btn-sub);font-weight:600;opacity:.9;white-space:pre-line;line-height:1.25}
 .act-btn:active{transform:scale(.96);filter:brightness(1.25)}
 .act-btn:disabled{background:#333a45;color:#8b949e;transform:none;filter:none}
 #btn-gbr{background:#c62828}
 #btn-tanker.tanker-ready{background:#c62828}
 #btn-light{background:#2e7d32}
 #btn-light.red-mode{background:#c62828}
-#btn-fs{position:absolute;top:calc(8px + env(safe-area-inset-top));right:8px;z-index:4;
-  min-width:44px;min-height:44px;border:none;border-radius:10px;font:inherit;font-size:13px;
+#btn-fs,#btn-debug,#btn-menu-hud,#btn-help{
+  position:relative;top:auto;right:auto;
+  min-width:var(--tap-min);min-height:var(--tap-min);border:none;border-radius:10px;font:inherit;
   font-weight:800;color:#e6edf3;background:rgba(28,34,43,.92);border:1px solid #39404b;
-  touch-action:manipulation;cursor:pointer;padding:0 10px}
-#btn-debug{position:absolute;top:calc(8px + env(safe-area-inset-top));right:58px;z-index:4;
-  min-width:44px;min-height:44px;border:none;border-radius:10px;font:inherit;font-size:12px;
-  font-weight:800;color:#e6edf3;background:rgba(28,34,43,.92);border:1px solid #39404b;
-  touch-action:manipulation;cursor:pointer;padding:0 8px}
-#btn-menu-hud{position:absolute;top:calc(8px + env(safe-area-inset-top));right:158px;z-index:4;
-  min-width:44px;min-height:44px;border:none;border-radius:10px;font:inherit;font-size:18px;
-  font-weight:800;color:#e6edf3;background:rgba(28,34,43,.92);border:1px solid #39404b;
-  touch-action:manipulation;cursor:pointer;padding:0}
-#btn-help{position:absolute;top:calc(8px + env(safe-area-inset-top));right:108px;z-index:4;
-  min-width:44px;min-height:44px;border:none;border-radius:10px;font:inherit;font-size:18px;
-  font-weight:800;color:#e6edf3;background:rgba(28,34,43,.92);border:1px solid #39404b;
-  touch-action:manipulation;cursor:pointer;padding:0}
-#btn-help:active,#btn-debug:active,#btn-menu-hud:active{transform:scale(.96);filter:brightness(1.25)}
+  touch-action:manipulation;cursor:pointer;padding:0 8px;flex:0 0 auto}
+#btn-fs{font-size:calc(13px * var(--ui-scale));padding:0 10px}
+#btn-debug{font-size:calc(12px * var(--ui-scale))}
+#btn-menu-hud,#btn-help{font-size:calc(18px * var(--ui-scale));padding:0}
+#btn-help:active,#btn-debug:active,#btn-menu-hud:active,#btn-fs:active{transform:scale(.96);filter:brightness(1.25)}
 #btn-debug.active{background:#1b5e20;border-color:#66bb6a;color:#fff}
-#btn-fs:active{transform:scale(.96);filter:brightness(1.25)}
+html.fd-native #btn-fs{display:none!important}
+
+/* Upgrade payment dialog */
+.upgrade-pay-dim{position:absolute;inset:0;z-index:9;background:rgba(8,10,14,.55);pointer-events:auto}
+.upgrade-pay{position:absolute;left:10px;right:10px;bottom:10px;z-index:10;
+  background:rgba(24,30,39,.98);border:1px solid #39404b;border-radius:16px;padding:14px 14px 12px;
+  box-shadow:0 -6px 28px #000c;max-height:75%;overflow-y:auto}
+.upgrade-pay.hidden,.upgrade-pay-dim.hidden{display:none}
+.upgrade-pay-x{position:absolute;top:8px;right:10px;width:36px;height:36px;border:none;border-radius:10px;
+  background:#2a313c;color:#e6edf3;font-size:16px;font-weight:800;cursor:pointer}
+.upgrade-pay-title{font-size:18px;font-weight:800;text-align:center;margin-bottom:8px;letter-spacing:.04em}
+.upgrade-pay-cost{font-size:15px;font-weight:700;text-align:center;margin-bottom:10px;color:#e6edf3}
+.upgrade-pay-row{display:flex;justify-content:space-between;align-items:center;
+  background:#1c222b;border-radius:10px;padding:8px 12px;margin-bottom:6px}
+.upgrade-pay-row span{font-size:13px;color:#8b949e;font-weight:600}
+.upgrade-pay-row b{font-size:15px;font-weight:800}
+#upgrade-pay-bonus{color:#ffd54f}
+.upgrade-pay-slider{width:100%;accent-color:#ffb300;margin:8px 0 12px}
+.upgrade-pay-error{background:#c62828;border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;
+  text-align:center;margin-bottom:8px}
+.upgrade-pay-error.hidden{display:none}
+.upgrade-pay-confirm{width:100%;min-height:48px;border:none;border-radius:12px;font:inherit;font-size:16px;
+  font-weight:800;color:#fff;background:#2e7d32;cursor:pointer;touch-action:manipulation;margin-bottom:8px}
+.upgrade-pay-confirm:active{transform:scale(.98);filter:brightness(1.15)}
+.upgrade-pay-confirm:disabled{background:#333a45;color:#8b949e}
+.upgrade-pay-cancel{width:100%;min-height:44px;border:none;border-radius:12px;font:inherit;font-size:15px;
+  font-weight:800;color:#e6edf3;background:#2a313c;cursor:pointer;touch-action:manipulation}
 
 /* ---- всплывающая панель (постройка / улучшение) ---- */
 #panel{position:absolute;left:8px;right:8px;bottom:8px;background:rgba(24,30,39,.97);

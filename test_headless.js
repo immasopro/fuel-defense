@@ -34,7 +34,12 @@ globalThis.window = {
 };
 globalThis.document = {
   getElementById: id => (els[id] || (els[id] = makeEl(id))),
-  documentElement: { requestFullscreen: () => {} },
+  documentElement: {
+    requestFullscreen: () => {},
+    style: { setProperty: () => {} },
+    dataset: {},
+    classList: { add: () => {}, remove: () => {}, contains: () => false, toggle: () => {} }
+  },
   exitFullscreen: () => {}
 };
 globalThis.requestAnimationFrame = globalThis.window.requestAnimationFrame;
@@ -55,6 +60,7 @@ const stubEl = () => ({ classList: { add: () => {}, remove: () => {} }, style: {
 UI.warning = stubEl();
 UI.panel = stubEl();
 UI.statMoney = stubEl();
+UI.statBonuses = stubEl();
 UI.statTraffic = stubEl();
 UI.statTime = stubEl();
 UI.btnTanker = Object.assign(stubEl(), { disabled: false, querySelector: () => stubEl() });
@@ -799,11 +805,11 @@ assert(despawnLog, 'Despawn complete logged');
 // version check
 const { compareVersions, isNewerVersion, GAME_VERSION, hasPendingUpdate, _setRemoteVersionForTest } =
   await import('./js/systems/versionCheck.js');
-assert(GAME_VERSION === '0.4.1', 'GAME_VERSION 0.4.1');
-assert(compareVersions('0.4.1', '0.4.0.4') > 0, 'semver newer');
-assert(!isNewerVersion('0.4.1'), 'same version not newer');
-assert(isNewerVersion('0.4.2'), '0.4.2 is newer');
-_setRemoteVersionForTest({ version: '0.4.2', notes: ['Тест'] });
+assert(GAME_VERSION === '0.4.2', 'GAME_VERSION 0.4.2');
+assert(compareVersions('0.4.2', '0.4.1') > 0, 'semver newer');
+assert(!isNewerVersion('0.4.2'), 'same version not newer');
+assert(isNewerVersion('0.4.3'), '0.4.3 is newer');
+_setRemoteVersionForTest({ version: '0.4.3', notes: ['Тест'] });
 assert(hasPendingUpdate(), 'pending update detected');
 
 // v0.2.8 depot branch + reservoir HUD
@@ -875,7 +881,7 @@ assert(Game.time > 0, 'game advances after rAF frames');
 globalThis.window.requestAnimationFrame = prevRaf;
 
 const { GameVersion } = await import('./js/config/gameVersion.js');
-assert(GameVersion.version === '0.4.1', 'GameVersion is 0.4.1');
+assert(GameVersion.version === '0.4.2', 'GameVersion is 0.4.2');
 assert(GameVersion.changes.length <= 8, 'patch notes capped at 8 items');
 
 const { StationApi } = await import('./js/systems/stationApi.js');
@@ -950,26 +956,28 @@ assert(tankerDeliveryCost() === 105000, 'tanker level 2 delivery 105000 rub');
 Game.tankerTruck.level = 5;
 assert(tankerDeliveryCost() === 332500, 'tanker level 5 delivery 332500 rub');
 
-// v0.4.1 — гибкий заказ топлива и бонусы
+// v0.4.2 — кэшбэк 3/5/7%, оплата улучшений бонусами до 100%
 const { quoteFuelOrder, canAffordFuelOrder, payWithBonus, canAffordWithBonus,
-  stationBonusShare, depotBonusShare } = await import('./js/systems/fuelOrderSystem.js');
+  stationBonusShare, depotBonusShare, payUpgrade, maxBonusForUpgrade, ensureBonusBalance } =
+  await import('./js/systems/fuelOrderSystem.js');
 FD.newGame('campaign', 1);
 assert(Game.money === 50000, 'start money 50000');
 assert(Game.bonuses === 0, 'bonuses start at 0');
 const q20 = quoteFuelOrder(20);
 assert(q20.liters === 200 && q20.pricePerLiter === 105 && q20.cost === 21000, '20% quote');
-assert(q20.cashbackPct === 10 && q20.bonuses === 2100, '20% cashback');
+assert(q20.cashbackPct === 3 && q20.bonuses === 630, '20% cashback 3%');
 const q50 = quoteFuelOrder(50);
 assert(q50.liters === 500 && q50.pricePerLiter === 90 && q50.cost === 45000, '50% quote');
-assert(q50.cashbackPct === 15 && q50.bonuses === 6750, '50% cashback');
+assert(q50.cashbackPct === 5 && q50.bonuses === 2250, '50% cashback 5%');
 const q90 = quoteFuelOrder(90);
-assert(q90.pricePerLiter === 70 && q90.cashbackPct === 20, '90% price/cashback');
+assert(q90.pricePerLiter === 70 && q90.cashbackPct === 7 && q90.bonuses === 4410, '90% cashback 7%');
 const q100 = quoteFuelOrder(100);
 assert(q100.liters === 1000 && q100.pricePerLiter === 70 && q100.cost === 70000, '100% quote');
-assert(q100.bonuses === 14000, '100% bonuses');
+assert(q100.bonuses === 4900, '100% bonuses 7%');
 assert(quoteFuelOrder(15).percent === 20, 'clamp below 20%');
 assert(quoteFuelOrder(105).percent === 100, 'clamp above 100%');
 assert(quoteFuelOrder(55).percent === 50 || quoteFuelOrder(55).percent === 60, 'snap to step');
+assert(stationBonusShare() === 1 && depotBonusShare() === 1, 'bonus share 100%');
 
 FD.newGame('campaign', 1);
 FD.actionBuildStation(Road.slots[0], 'a92');
@@ -977,9 +985,9 @@ readyTanker();
 Game.money = 50000;
 Game.bonuses = 0;
 const moneyB = Game.money;
-assert(FD.callTanker({ liters: 200, cost: 21000, bonuses: 2100 }), 'partial order succeeds');
+assert(FD.callTanker({ liters: 200, cost: 21000, bonuses: 630 }), 'partial order succeeds');
 assert(Game.money === moneyB - 21000, 'partial cost deducted once');
-assert(Game.bonuses === 2100, 'cashback bonuses once');
+assert(Game.bonuses === 630, 'cashback bonuses once');
 assert(Game.tanker.unit && Game.tanker.unit.load === 200, 'tanker load 200L');
 
 FD.newGame('campaign', 1);
@@ -987,22 +995,35 @@ FD.actionBuildStation(Road.slots[0], 'a92');
 readyTanker();
 Game.money = 10000;
 assert(!canAffordFuelOrder(quoteFuelOrder(100)), 'cannot afford 100%');
-assert(!FD.callTanker({ liters: 1000, cost: 70000, bonuses: 14000 }), 'reject unaffordable order');
+assert(!FD.callTanker({ liters: 1000, cost: 70000, bonuses: 4900 }), 'reject unaffordable order');
 assert(Game.money === 10000 && Game.bonuses === 0, 'no charge when rejected');
 
 FD.newGame('campaign', 1);
-Game.bonuses = 10000;
+Game.money = 0;
+Game.bonuses = 20000;
 const stCost = CONFIG.station.cost;
-assert(canAffordWithBonus(stCost, stationBonusShare()), 'station affordable with bonus share');
+assert(canAffordWithBonus(stCost, stationBonusShare()), 'station affordable with 100% bonuses');
+assert(maxBonusForUpgrade(stCost) === stCost, 'max bonus capped by cost');
 const pay = payWithBonus(stCost, stationBonusShare());
-assert(pay.ok && pay.bonus === Math.min(10000, Math.floor(stCost * 0.3)), 'station bonus share ≤30%');
-assert(Game.bonuses === 10000 - pay.bonus, 'bonuses spent on station');
+assert(pay.ok && pay.bonus === stCost && pay.cash === 0, 'full bonus allowed');
+assert(Game.bonuses === 20000 - pay.bonus, 'bonuses spent on station');
 
 FD.newGame('campaign', 1);
-Game.money = 100000;
-Game.bonuses = 50000;
-const depotPay = payWithBonus(100000, depotBonusShare());
-assert(depotPay.ok && depotPay.bonus === 20000, 'depot bonus share ≤20%');
+Game.money = 0;
+Game.bonuses = 70000;
+const depotPay = payUpgrade(50000, 50000);
+assert(depotPay.ok && depotPay.bonus === 50000 && depotPay.cash === 0, '100% bonus upgrade payment');
+assert(Game.bonuses === 20000 && Game.money === 0, 'only upgrade cost in bonuses spent');
+
+FD.newGame('campaign', 1);
+Game.money = 40000;
+Game.bonuses = 12500;
+const mixed = payUpgrade(50000, 12500);
+assert(mixed.ok && mixed.bonus === 12500 && mixed.cash === 37500, 'mixed bonus+cash payment');
+assert(Game.money === 2500 && Game.bonuses === 0, 'mixed balances after pay');
+
+Game.bonuses = undefined;
+assert(ensureBonusBalance() === 0, 'missing bonusBalance migrates to 0');
 
 const { actionUpgradeTankerTruck } = await import('./js/systems/upgradeSystem.js');
 FD.newGame('campaign', 1);
@@ -1016,6 +1037,9 @@ assert(Game.money === 0, 'tanker upgrade cash deducted');
 FD.newGame('campaign', 1);
 Game.paused = false;
 assert(Game.paused === false, 'order menu path does not require pause');
+assert(document.getElementById('top-bar'), 'top-bar UI chrome exists');
+assert(document.getElementById('stat-bonuses'), 'bonus HUD element exists');
+assert(document.getElementById('upgrade-pay'), 'upgrade payment dialog exists');
 
 // v0.2.10.1 / v0.4.0.3 — перекуп не оплачивает кражу; stolen только после побега
 const { finishScalperFuel, finishFuel, recordScalperTheft, commitScalperEscapeTheft, forfeitScalperTheft } =
@@ -1180,10 +1204,10 @@ const migrated = migrateSaveObject({ version: '0.2.11', depot: { level: 2, res: 
 assert(migrated.tankerTruck.level === 1, 'migration tanker level I');
 assert(migrated.fleet.level === 1, 'migration fleet level I');
 assert(migrated.depot.res <= migrated.depot.cap, 'migration clamps fuel');
-assert(isNewerVersion('0.4.2'), 'semver newer');
-assert(!isNewerVersion('0.4.1'), 'same version not newer');
+assert(isNewerVersion('0.4.3'), 'semver newer');
+assert(!isNewerVersion('0.4.2'), 'same version not newer');
 _resetVersionNotificationForTest();
-showVersionNotification('0.4.1');
+showVersionNotification('0.4.2');
 assert(true, 'version notification once per session');
 
 // v0.3.1.1 — UX бензовозов и подготовка после возврата

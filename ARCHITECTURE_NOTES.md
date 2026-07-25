@@ -27,6 +27,14 @@ ES module live bindings resolve these at call time (no top-level circular init).
 5. **`holderBusy`** — module-level flag kept in `trafficSystem.js` per assignment.
 6. **Headless test** — uses `globalThis.__FD_HEADLESS__` to skip `boot()`; DOM is mocked minimally (no full canvas semantics).
 
+## Patch 0.4.2 — Adaptive UI, bonus HUD, full bonus upgrades
+
+- **UI safe zone** — `#top-bar` hosts menu/help/debug/fs; game canvas in `#stage` is not covered by chrome.
+- **Bonus HUD** — separate `★ БОНУСЫ:` panel; updates on award/spend.
+- **Cashback** — 20–40% → 3%; 50–80% → 5%; 90–100% → 7% of paid fuel cost.
+- **Upgrades** — station/depot may be paid up to 100% with bonuses via payment dialog + slider.
+- **APK** — rebuilt as v0.4.2 with native immersive fullscreen (fs button hidden).
+
 ## Patch 0.4.1 — Flexible fuel order + bonus account
 
 - **Order menu** — tanker button opens non-pausing order UI; slider 20–100% (10% steps).
