@@ -1,8 +1,9 @@
-/** Гибкий заказ топлива и бонусный счёт — v0.4.1 */
+/** Гибкий заказ топлива и бонусный счёт — v0.4.2 */
 
 import { CONFIG } from '../config/index.js';
 import { Game } from '../core/gameState.js';
-import { tankerTruckCapacity } from './economySystem.js';
+import { tankerTruckCapacity, canOrderTanker } from './economySystem.js';
+import { saveRunEconomy } from './runEconomySave.js';
 
 export function normalizeOrderPercent(pct) {
   const list = CONFIG.fuelOrder.percents;
@@ -29,27 +30,54 @@ export function quoteFuelOrder(percent) {
   return { percent: pct, capacity: cap, liters, pricePerLiter, cost, cashbackPct, bonuses };
 }
 
-/** Строгая проверка для меню заказа: нужны деньги ≥ стоимости (без кредита). */
+/**
+ * Доступность заказа топлива — та же кредитная политика, что canOrderTanker:
+ * после списания баланс не ниже −cost (эквивалентно bal >= 0 при положительном cost).
+ * Бонусы не учитываются.
+ */
 export function canAffordFuelOrder(quote, money) {
   const bal = money != null ? money : Game.money;
   const cost = quote?.cost ?? 0;
-  return bal >= cost;
+  return canOrderTanker(bal, cost);
+}
+
+export function ensureBonusBalance() {
+  if (Game.bonuses == null || !Number.isFinite(Game.bonuses)) Game.bonuses = 0;
+  Game.bonuses = Math.max(0, Math.round(Game.bonuses));
+  return Game.bonuses;
 }
 
 export function addBonuses(amount) {
   if (!(amount > 0)) return;
-  Game.bonuses = (Game.bonuses || 0) + Math.round(amount);
+  ensureBonusBalance();
+  Game.bonuses += Math.round(amount);
+  saveRunEconomy();
+}
+
+/** Макс. бонусов, которые можно потратить на улучшение: min(баланс, стоимость). */
+export function maxBonusForUpgrade(cost) {
+  ensureBonusBalance();
+  const c = Math.round(cost || 0);
+  if (c <= 0) return 0;
+  return Math.min(Game.bonuses, c);
 }
 
 export function bonusUsableForCost(cost, share) {
-  const maxBonus = Math.floor(cost * share);
-  return Math.min(Game.bonuses || 0, maxBonus);
+  const s = share == null ? 1 : share;
+  const maxBonus = Math.floor(Math.round(cost) * s);
+  ensureBonusBalance();
+  return Math.min(Game.bonuses, maxBonus);
 }
 
+/** Деньги + бонусы покрывают стоимость (доля бонусов до share, по умолчанию 100%). */
 export function canAffordWithBonus(cost, share) {
   if (cost == null) return false;
-  const bonus = bonusUsableForCost(cost, share);
-  return Game.money >= cost - bonus;
+  const bonus = bonusUsableForCost(cost, share == null ? 1 : share);
+  return Game.money >= Math.round(cost) - bonus;
+}
+
+export function canAffordUpgrade(cost) {
+  return canAffordWithBonus(cost, 1);
 }
 
 /**
@@ -61,16 +89,35 @@ export function payWithBonus(cost, share) {
     return { ok: false, cash: 0, bonus: 0 };
   }
   const bonus = bonusUsableForCost(cost, share);
-  const cash = cost - bonus;
+  const cash = Math.round(cost) - bonus;
   Game.money -= cash;
   Game.bonuses = (Game.bonuses || 0) - bonus;
+  saveRunEconomy();
   return { ok: true, cash, bonus };
 }
 
+/**
+ * Оплата с явным количеством бонусов (окно улучшения).
+ * bonusSpend ограничивается min(cost, баланс).
+ */
+export function payUpgrade(cost, bonusSpend) {
+  const c = Math.round(cost);
+  if (!(c > 0)) return { ok: false, cash: 0, bonus: 0 };
+  ensureBonusBalance();
+  const bonus = Math.max(0, Math.min(Math.round(bonusSpend || 0), maxBonusForUpgrade(c)));
+  const cash = c - bonus;
+  if (Game.money < cash) return { ok: false, cash: 0, bonus: 0 };
+  Game.money -= cash;
+  Game.bonuses -= bonus;
+  saveRunEconomy();
+  return { ok: true, cash, bonus };
+}
+
+/** v0.4.2: до 100% стоимости улучшения можно оплатить бонусами. */
 export function stationBonusShare() {
-  return CONFIG.fuelOrder.bonusShareStation;
+  return CONFIG.fuelOrder.bonusShareStation ?? 1;
 }
 
 export function depotBonusShare() {
-  return CONFIG.fuelOrder.bonusShareDepot;
+  return CONFIG.fuelOrder.bonusShareDepot ?? 1;
 }

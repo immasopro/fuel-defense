@@ -18,6 +18,7 @@ import {
   canDispatchGbr, gbrCallCost
 } from './gbrLogistics.js';
 import { manualCallGbr } from './gbrPursuit.js';
+import { saveRunEconomy } from './runEconomySave.js';
 
 function hasLevelTarget() {
   return Game.mode === 'campaign';
@@ -122,14 +123,8 @@ function callTanker(order) {
   const liters = order?.liters != null ? order.liters : tankerDeliveryLiters();
   const cost = order?.cost != null ? order.cost : tankerDeliveryCost();
   const bonuses = order?.bonuses != null ? order.bonuses : 0;
-  // Меню заказа (явный order.cost): только при наличии денег. Без order — кредит как раньше.
-  if (order != null && order.cost != null) {
-    if (Game.money < cost) {
-      const p = Depot.pos || Road.posAt(Road.spawnS, 0);
-      addFloat(p.x, p.y - 30, 'Недостаточно средств для закупки', '#ef5350');
-      return false;
-    }
-  } else if (!canOrderTanker(undefined, cost)) {
+  // Единая кредитная политика (legacy + меню): canOrderTanker(money, cost).
+  if (!canOrderTanker(undefined, cost)) {
     const p = Depot.pos || Road.posAt(Road.spawnS, 0);
     addFloat(p.x, p.y - 30, 'Недостаточно кредитного лимита для закупки топлива', '#ef5350');
     return false;
@@ -138,6 +133,7 @@ function callTanker(order) {
   if (bonuses > 0) {
     Game.bonuses = (Game.bonuses || 0) + bonuses;
   }
+  saveRunEconomy();
   const t = makeTanker(truck.id, liters);
   setTankerPhase(t, TankerPhase.SPAWNING);
   addToHolder(t, { priority: true, countsForDefeat: false });
