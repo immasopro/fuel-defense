@@ -4,7 +4,7 @@ import { Road, approachStopS, apronPoseForRank, distAhead, distNearStop } from '
 import { GBRBase } from '../world/map.js';
 import { mod, rand } from '../core/utils.js';
 import { makeScalper, makeBgCar } from '../vehicles/vehicleFactory.js';
-import { finishScalperFuel, addFloat } from './economySystem.js';
+import { finishScalperFuel, addFloat, forfeitScalperTheft } from './economySystem.js';
 import { currentSpawnInterval, scalperCooldown } from './spawnSystem.js';
 import { onHolderChanged, addToHolder } from './trafficSystem.js';
 import { sortedStationSlots } from '../world/map.js';
@@ -16,10 +16,11 @@ import { beginPullIn } from '../stations/stationQueue.js';
 import { crossed } from '../vehicles/vehicle.js';
 import {
   onScalperTheftDetected, getGbrTarget, releaseGbrTarget,
+  gbrPursuitTarget, isGbrAssignedTarget, isAssignedScalperOnMap,
   onGbrArrestStarted, onGbrArrestComplete, onScalperLeavingStation, logPursuitEvent
 } from './gbrPursuit.js';
 import {
-  ScalperOwner, initScalperLifecycle, isStationExitActive,
+  ScalperOwner, initScalperLifecycle, isStationExitActive, isScalperLeavingMap,
   beginStationExit, handoffScalperToRoad, transferScalperOwner, getScalperOwner
 } from './scalperLifecycle.js';
 import { fmtRubDelta } from '../core/currency.js';
@@ -39,7 +40,7 @@ function scalperCap(v) {
 
 
 function requestScalperLeaveStation(v, L, reason) {
-  if (isStationExitActive(v)) return;
+  if (isStationExitActive(v) || isScalperLeavingMap(v)) return;
 
   const slot = v.targetSlot;
   const pumpJ = v.pumpJ ?? 0;
@@ -156,7 +157,9 @@ function updateScalperTour(v, dt, L) {
 
 function updateScalperAtColumn(v, dt, L) {
   if (getScalperOwner(v) === ScalperOwner.ROAD) return;
-  if (v.scalperPhase === ScalperPhase.ARRESTING) return;
+  if (v.scalperPhase === ScalperPhase.ARRESTING ||
+      v.scalperPhase === ScalperPhase.EXITING ||
+      isStationExitActive(v)) return;
 
   const ctx = SA.getColumnContext(v);
 
@@ -260,6 +263,13 @@ function scalperOnColumn(sc) {
 
 }
 
+/** Дорожное преследование: та же полоса, сближение до дистанции ареста. */
+function applyRoadChasePursuit(g, target, L) {
+  g.lane = target.lane || g.lane || 'inner';
+  g.maxV = Math.max(gbrPatrolSpeed(), CONFIG.scalper.exitSpeed + 10);
+  g.stopS = mod(target.s, L);
+}
+
 
 
 function vehicleWorldPos(v) {
@@ -285,6 +295,7 @@ function scalperOnMap(sc) {
 function scalperIsGbrTarget(sc) {
   return scalperOnMap(sc) &&
     sc.scalperPhase !== ScalperPhase.ARRESTING &&
+    sc.scalperPhase !== ScalperPhase.EXITING &&
     !!sc.wanted;
 }
 
@@ -323,6 +334,58 @@ function gbrArrestPose(sc) {
 
 
 
+function gbrCatchDistance(g, sc) {
+  const pg = vehicleWorldPos(g);
+  const ps = vehicleWorldPos(sc);
+  return Math.hypot(ps.x - pg.x, ps.y - pg.y);
+}
+
+
+
+function gbrCanArrestNow(g, sc) {
+  if (!isGbrAssignedTarget(g, sc) || !isAssignedScalperOnMap(sc)) return false;
+  if (sc.scalperPhase === ScalperPhase.ARRESTING) return false;
+  return gbrCatchDistance(g, sc) <= CONFIG.gbr.arrestDist;
+}
+
+
+
+function resumeGbrChase(g, L, reason) {
+  SA.releaseColumn(g);
+  if (g.state === 'station' || g.state === 'pullIn') {
+    if (g.chaseResumeS != null) {
+      g.s = g.chaseResumeS;
+    } else if (g.targetSlot) {
+      g.s = mod(g.targetSlot.s + 16, L);
+    }
+    g.prevS = g.s;
+    g.pose = null;
+    g.state = 'drive';
+    g.lane = g.lane || 'inner';
+    g.animT = 0;
+    g.animFrom = null;
+    g.animTo = null;
+  }
+  g.approachWait = 0;
+  g.chaseResumeS = null;
+  const sc = getGbrTarget(g) || g.chaseTarget;
+  setGbrPhase(g, GbrPhase.CHASE);
+  g.maxV = gbrPatrolSpeed();
+  g.v = Math.max(g.v || 0, gbrPatrolSpeed() * 0.4);
+  if (sc && isGbrAssignedTarget(g, sc) && isAssignedScalperOnMap(sc)) {
+    if (scalperOnColumn(sc)) {
+      g.stopS = mod(sc.s - CONFIG.gbr.chaseFollowDist, L);
+    } else {
+      applyRoadChasePursuit(g, sc, L);
+    }
+  } else {
+    g.stopS = null;
+  }
+  if (reason) logPursuitEvent('[GBR #' + (g.fleetId || '?') + '] ' + reason);
+}
+
+
+
 function beginGbrPullIn(g, sc) {
 
   if (g.state !== 'drive' || !sc.targetSlot || !sc.pump) return false;
@@ -333,6 +396,7 @@ function beginGbrPullIn(g, sc) {
 
   if (!SA.claimColumn(st, g, sc.pumpJ)) return false;
 
+  g.chaseResumeS = g.s;
   g.targetSlot = slot;
 
   setGbrPhase(g, GbrPhase.ENTER_SERVICE_LANE);
@@ -420,19 +484,24 @@ function tryGbrApproach(g, sc, dt, L) {
 
 
 function startArrest(g, sc) {
-  const st = sc.station;
-  const slot = sc.targetSlot;
-  SA.releaseColumn(sc, { unblock: true });
-  sc.pump = null;
-  sc.station = null;
+  const st = sc.station || sc.targetSlot?.station;
+  const slot = sc.targetSlot || sc.pocketSlot;
+  SA.cleanupVehicleStationLinks(sc);
   if (st && slot) SA.promotePocket(st, slot);
   setGbrPhase(g, GbrPhase.ARREST);
   setScalperPhase(sc, ScalperPhase.ARRESTING);
+  sc.v = 0;
+  sc.stopS = sc.s ?? sc.pose?.s ?? null;
   sc.state = 'block';
   g.v = 0;
+  if (g.state === 'drive') g.stopS = g.s;
   g.arrestT = CONFIG.gbr.towTime;
+  g.chaseResumeS = null;
   onGbrArrestStarted(g, sc);
-  addFloat(g.pose?.x ?? 0, (g.pose?.y ?? 0) - 24, 'Задержание…', '#42a5f5');
+  const onRoad = !sc.pose;
+  if (onRoad) logPursuitEvent('[GBR #' + g.fleetId + '] Road arrest');
+  addFloat(g.pose?.x ?? vehicleWorldPos(g).x, (g.pose?.y ?? vehicleWorldPos(g).y) - 24,
+    'Задержание…', '#42a5f5');
 }
 
 
@@ -464,7 +533,7 @@ function beginGbrReturn(g, slot, pumpJ, L) {
 
 function finishArrest(g, sc, L) {
 
-  const slot = sc?.targetSlot || g.targetSlot;
+  const slot = sc?.targetSlot || sc?.pocketSlot || g.targetSlot;
 
   const pumpJ = sc?.pumpJ ?? 0;
 
@@ -488,16 +557,37 @@ function finishArrest(g, sc, L) {
     Game.money += pay;
     Game.stats.earned += pay;
     Game.stats.liters += sc.totalGot;
-    addFloat(sc.pose?.x ?? 0, (sc.pose?.y ?? 0) - 30, fmtRubDelta(pay) + ' оплата перекупа', '#8bc34a');
+    addFloat(sc.pose?.x ?? vehicleWorldPos(sc).x, (sc.pose?.y ?? vehicleWorldPos(sc).y) - 30,
+      fmtRubDelta(pay) + ' оплата перекупа', '#8bc34a');
   }
+  forfeitScalperTheft(sc);
 
   SA.releaseColumn(g);
-  beginStationExit(sc, 'arrest', { slot, pumpJ });
-  onScalperLeavingStation(sc, g);
+  const arrestedOnStation = !!sc.pose && !!slot;
+  if (arrestedOnStation && !isScalperLeavingMap(sc)) {
+    beginStationExit(sc, 'arrest', { slot, pumpJ });
+    onScalperLeavingStation(sc, g);
+  } else {
+    sc.pose = null;
+    sc.state = 'drive';
+    sc.stationExitActive = false;
+    if (!isScalperLeavingMap(sc)) {
+      SA.cleanupVehicleStationLinks(sc);
+      sc.lane = 'outer';
+      sc.scalperLeavingMap = true;
+      sc.scalperExitT = 0;
+      sc.scalperExitStallT = 0;
+      sc.stopS = null;
+      setScalperPhase(sc, ScalperPhase.EXITING);
+      transferScalperOwner(sc, ScalperOwner.ROAD, 'post_road_arrest');
+      logPursuitEvent('[SCALPER] Leaving map');
+    }
+  }
   onGbrArrestComplete(g, sc);
   beginGbrReturn(g, slot, pumpJ, L);
 
-  addFloat(g.pose?.x ?? 0, (g.pose?.y ?? 0) - 20, '→ база', '#42a5f5');
+  addFloat(g.pose?.x ?? vehicleWorldPos(g).x, (g.pose?.y ?? vehicleWorldPos(g).y) - 20,
+    '→ база', '#42a5f5');
 
 }
 
@@ -560,20 +650,27 @@ function findVisibleGbrTarget(g) {
 
 
 function updateGbrChase(g, sc, dt, L) {
-  if (!sc || !scalperOnMap(sc) || !scalperIsGbrTarget(sc)) {
-    releaseGbrTarget(g);
+  const target = gbrPursuitTarget(g) || (isGbrAssignedTarget(g, sc) && isAssignedScalperOnMap(sc) ? sc : null);
+  if (!target) {
+    if (g.targetScalperId != null) releaseGbrTarget(g, { reason: 'despawn' });
     setGbrPhase(g, GbrPhase.PATROL);
     g.stopS = null;
     return;
   }
 
-  if (scalperOnColumn(sc)) {
-    tryGbrApproach(g, sc, dt, L);
+  g.chaseTarget = target;
+
+  if (gbrCanArrestNow(g, target)) {
+    startArrest(g, target);
     return;
   }
 
-  g.maxV = gbrPatrolSpeed();
-  g.stopS = mod(sc.s - CONFIG.gbr.chaseFollowDist, L);
+  if (scalperOnColumn(target)) {
+    tryGbrApproach(g, target, dt, L);
+    return;
+  }
+
+  applyRoadChasePursuit(g, target, L);
 }
 
 function updateGBR(g, dt, L, removeSet) {
@@ -600,31 +697,37 @@ function updateGBR(g, dt, L, removeSet) {
     return;
   }
 
-  if (g.state === 'station' && g.gbrPhase === GbrPhase.ENTER_SERVICE_LANE) {
-    const target = getGbrTarget(g) || g.chaseTarget;
-    if (target && scalperIsGbrTarget(target) && scalperOnColumn(target)) {
-      startArrest(g, target);
+  if (g.state === 'pullIn' && g.gbrPhase === GbrPhase.ENTER_SERVICE_LANE) {
+    const target = gbrPursuitTarget(g);
+    if (!target || !scalperOnColumn(target)) {
+      resumeGbrChase(g, L, 'Target left station — resuming chase');
+      return;
     }
     return;
   }
 
-  if (g.state === 'pullIn' || g.state === 'pullOut') return;
-
-  if (g.gbrPhase === GbrPhase.CHASE) {
-    const sc2 = getGbrTarget(g);
-    if (!sc2 || !scalperOnMap(sc2) || !scalperIsGbrTarget(sc2)) {
-      releaseGbrTarget(g);
+  if (g.state === 'station' && g.gbrPhase === GbrPhase.ENTER_SERVICE_LANE) {
+    const target = gbrPursuitTarget(g);
+    if (target && scalperOnColumn(target)) {
+      startArrest(g, target);
+    } else if (target) {
+      resumeGbrChase(g, L, 'Target left station — resuming chase');
+    } else {
+      SA.releaseColumn(g);
+      g.pose = null;
+      g.state = 'drive';
+      g.lane = g.lane || 'inner';
+      releaseGbrTarget(g, { reason: 'despawn' });
       setGbrPhase(g, GbrPhase.PATROL);
       g.stopS = null;
-      return;
     }
-    g.chaseTarget = sc2;
-    if (scalperOnColumn(sc2)) {
-      tryGbrApproach(g, sc2, dt, L);
-      return;
-    }
-    g.maxV = gbrPatrolSpeed();
-    g.stopS = mod(sc2.s - CONFIG.gbr.chaseFollowDist, L);
+    return;
+  }
+
+  if (g.state === 'pullOut') return;
+
+  if (g.gbrPhase === GbrPhase.CHASE) {
+    updateGbrChase(g, gbrPursuitTarget(g), dt, L);
     return;
   }
 
@@ -699,7 +802,8 @@ export {
   updateGBR, tickSpecialSpawns, initGbrOnSpawn, advanceScalperFromStation,
   decideAfterArrestExit, onGbrReturnPullOutComplete,
   beginGbrPullIn, tryGbrApproach, scalperIsGbrTarget, scalperOnMap,
-  gbrSeesScalper, gbrTargetsInRange, startArrest, tryAttachScalperToStation
+  gbrSeesScalper, gbrTargetsInRange, startArrest, tryAttachScalperToStation,
+  gbrCanArrestNow, resumeGbrChase
 };
 
 

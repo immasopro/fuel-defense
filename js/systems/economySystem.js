@@ -12,18 +12,24 @@ function tankerDeliveryLiters() {
   return tankerTruckCapacity();
 }
 
+/** Полная загрузка по старой цене (для HUD/тестов совместимости). */
 function tankerDeliveryCost() {
+  return quoteFullLegacyCost();
+}
+
+function quoteFullLegacyCost() {
   return tankerDeliveryLiters() * CONFIG.fuelCostPerLiter;
 }
 
-function tankerCreditLimit() {
-  return -tankerDeliveryCost();
+function tankerCreditLimit(cost) {
+  const c = cost != null ? cost : tankerDeliveryCost();
+  return -c;
 }
 
-function canOrderTanker(money) {
-  const cost = tankerDeliveryCost();
+function canOrderTanker(money, cost) {
+  const c = cost != null ? cost : tankerDeliveryCost();
   const bal = money != null ? money : Game.money;
-  return bal - cost >= tankerCreditLimit();
+  return bal - c >= tankerCreditLimit(c);
 }
 
 function addFloat(x, y, txt, color) {
@@ -67,14 +73,30 @@ function finishFuel(v) {
 }
 
 function recordScalperTheft(amt) {
+  if (!(amt > 0)) return;
   Game.stats.stolenLiters += amt;
   Game.stats.stolenDamage += amt * CONFIG.fuelCostPerLiter;
   checkScalperEvolutionThreshold();
 }
 
+/** Заправка перекупа: топливо только в его таре, в глобальный счётчик — после побега. */
 function finishScalperFuel(v, amt) {
+  if (!(amt > 0) || !v) return;
   v.totalGot += amt;
-  recordScalperTheft(amt);
+}
+
+/** Успешный побег с карты — засчитываем вынесенное топливо. */
+function commitScalperEscapeTheft(sc) {
+  if (!sc || sc.theftCommitted || sc.theftForfeited) return;
+  sc.theftCommitted = true;
+  const amt = sc.totalGot || 0;
+  if (amt > 0.01) recordScalperTheft(amt);
+}
+
+/** Задержание ГБР — топливо не идёт в усиление перекупов. */
+function forfeitScalperTheft(sc) {
+  if (!sc) return;
+  sc.theftForfeited = true;
 }
 
 function removeScalper(sc, removeSet, early) {
@@ -82,4 +104,5 @@ function removeScalper(sc, removeSet, early) {
 }
 
 export { addFloat, finishFuel, finishScalperFuel, removeScalper, recordScalperTheft,
+  commitScalperEscapeTheft, forfeitScalperTheft,
   tankerDeliveryLiters, tankerDeliveryCost, tankerCreditLimit, canOrderTanker, tankerTruckCapacity };

@@ -21,10 +21,11 @@ import { UI } from './ui/hud.js';
 
 export function newGame(mode, levelIdx) {
   Game.mode = mode;
-  Game.levelIdx = levelIdx || (mode === 'endless' ? 11 : 1);
+  Game.levelIdx = mode === 'campaign' ? (levelIdx || 1) : 0;
   Game.modeCfg = mode === 'endless' ? CONFIG.endless : CONFIG.levels[Game.levelIdx - 1];
   Game.state = 'play';
   Game.money = Game.modeCfg.startMoney;
+  Game.bonuses = 0;
   Game.time = 0;
   Game.depot = { level: 1, res: CONFIG.depot.levels[0], cap: CONFIG.depot.levels[0] };
   Game.vehicles = [];
@@ -129,10 +130,13 @@ export function update(dt) {
   updateVehicles(dt, L);
   if (Game.state !== 'play') return;
   if (checkFuelCrisis()) return;
-  if (Game.stats.served >= getTargetCars()) {
-    if (Game.money < 0) endGame(false, 'bankruptcy');
-    else endGame(true);
-    return;
+  if (Game.mode === 'campaign') {
+    const target = getTargetCars();
+    if (target != null && Game.stats.served >= target) {
+      if (Game.money < 0) endGame(false, 'bankruptcy');
+      else endGame(true);
+      return;
+    }
   }
   postStationMaintenance(dt);
   updateTimersAndWarning(dt);

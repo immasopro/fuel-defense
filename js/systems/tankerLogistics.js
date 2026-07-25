@@ -137,16 +137,12 @@ export function nearestTankerPrepSeconds() {
   return null;
 }
 
-/** Строки для кнопки вызова: стоимость + таймер или «Готов» */
-export function tankerButtonSub(costRub, fmtCost) {
-  const lines = [fmtCost(costRub)];
-  if (findReadyTruck()) {
-    lines.push('Готов');
-  } else {
-    const prep = nearestTankerPrepSeconds();
-    if (prep != null) lines.push('Подготовка: ' + Math.ceil(prep) + ' с');
-  }
-  return lines.join('\n');
+/** Строки для кнопки вызова: «Готов» или таймер подготовки */
+export function tankerButtonSub() {
+  if (findReadyTruck()) return 'Готов';
+  const prep = nearestTankerPrepSeconds();
+  if (prep != null) return 'Подготовка: ' + Math.ceil(prep) + ' с';
+  return '—';
 }
 
 /** Полный список для DBG */

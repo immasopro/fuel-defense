@@ -1,33 +1,70 @@
-/** Campaign and endless mode definitions (v0.2.1 — progress by cars served) */
+/** Campaign (20 levels) and Endless mode — v0.4.0 */
+
+/** 0,25 авто/сек — один клиент каждые 4 с */
 export const SPAWN_START_INTERVAL = 4.0;
 
-export const levels = [
-  { name: 'Уровень 1',  targetCars: 100, endInterval: 2.5,  startMoney: 28800,
-    scalper: { firstAt: 60, intervalStart: 45, intervalEnd: 35 }, canister: [0, .05] },
-  { name: 'Уровень 2',  targetCars: 140, endInterval: 2.2,  startMoney: 28800,
-    scalper: { firstAt: 55, intervalStart: 40, intervalEnd: 30 }, canister: [.03, .09] },
-  { name: 'Уровень 3',  targetCars: 190, endInterval: 2.0,  startMoney: 27000,
-    scalper: { firstAt: 50, intervalStart: 36, intervalEnd: 26 }, canister: [.05, .13] },
-  { name: 'Уровень 4',  targetCars: 250, endInterval: 1.8,  startMoney: 27000,
-    scalper: { firstAt: 45, intervalStart: 32, intervalEnd: 22 }, canister: [.08, .17] },
-  { name: 'Уровень 5',  targetCars: 320, endInterval: 1.6,  startMoney: 25200,
-    scalper: { firstAt: 40, intervalStart: 28, intervalEnd: 18 }, canister: [.10, .22] },
-  { name: 'Уровень 6',  targetCars: 400, endInterval: 1.45, startMoney: 25200,
-    scalper: { firstAt: 38, intervalStart: 26, intervalEnd: 16 }, canister: [.12, .24] },
-  { name: 'Уровень 7',  targetCars: 500, endInterval: 1.30, startMoney: 23400,
-    scalper: { firstAt: 35, intervalStart: 24, intervalEnd: 14 }, canister: [.14, .26] },
-  { name: 'Уровень 8',  targetCars: 620, endInterval: 1.20, startMoney: 23400,
-    scalper: { firstAt: 32, intervalStart: 22, intervalEnd: 12 }, canister: [.16, .28] },
-  { name: 'Уровень 9',  targetCars: 760, endInterval: 1.10, startMoney: 21600,
-    scalper: { firstAt: 30, intervalStart: 20, intervalEnd: 11 }, canister: [.18, .30] },
-  { name: 'Уровень 10', targetCars: 900, endInterval: 1.0,  startMoney: 21600,
-    scalper: { firstAt: 28, intervalStart: 18, intervalEnd: 10 }, canister: [.20, .32] }
+/** Первые 80 % уровня — плавный разгон, последние 20 % — максимум */
+export const SPAWN_RAMP_FRAC = 0.8;
+
+/** Минимальный интервал спавна (макс. скорость) по тирам кампании */
+export const CAMPAIGN_MAX_INTERVAL = {
+  /** уровни 1–5: 0,5 авто/с */
+  tier1: 2.0,
+  /** уровни 6–9: 0,667 авто/с */
+  tier2: 1.5,
+  /** уровни 10–20: 1 авто/с */
+  tier3: 1.0
+};
+
+export const ENDLESS_SPAWN = {
+  startInterval: 4.0,
+  minInterval: 1 / 3,
+  rampCars: 10000
+};
+
+const TARGETS = [
+  100, 130, 170, 220, 280, 360, 460, 600, 770, 1000,
+  1500, 1690, 1900, 2150, 2420, 2730, 3080, 3470, 3910, 5000
 ];
 
+function scalperForLevel(i) {
+  const firstAt = Math.max(22, 62 - i * 2);
+  const intervalStart = Math.max(12, 46 - i * 2);
+  const intervalEnd = Math.max(8, 36 - i * 1.3);
+  return { firstAt, intervalStart: Math.round(intervalStart), intervalEnd: Math.round(intervalEnd) };
+}
+
+function canisterForLevel(i) {
+  const lo = Math.min(0.32, (i - 1) * 0.018);
+  const hi = Math.min(0.38, lo + 0.08);
+  return [Math.round(lo * 100) / 100, Math.round(hi * 100) / 100];
+}
+
+function startMoneyForLevel(i) {
+  return 50000;
+}
+
+export const levels = TARGETS.map((targetCars, idx) => {
+  const i = idx + 1;
+  return {
+    name: 'Уровень ' + i,
+    targetCars,
+    startMoney: startMoneyForLevel(i),
+    scalper: scalperForLevel(i),
+    canister: canisterForLevel(i)
+  };
+});
+
+export const CAMPAIGN_LEVEL_COUNT = levels.length;
+
+export function campaignMaxSpawnInterval(levelIdx) {
+  if (levelIdx <= 5) return CAMPAIGN_MAX_INTERVAL.tier1;
+  if (levelIdx <= 9) return CAMPAIGN_MAX_INTERVAL.tier2;
+  return CAMPAIGN_MAX_INTERVAL.tier3;
+}
+
 export const endless = {
-  startMoney: 28800,
-  baseTarget: 900,
-  targetStep: 200,
+  startMoney: 50000,
   scalper: { firstAt: 25, intervalStart: 16, intervalEnd: 8 },
   canister: [0, .35]
 };

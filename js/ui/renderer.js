@@ -7,7 +7,7 @@ import { Depot, GBRBase, stationReservoirHud } from '../world/map.js';
 import { TankerPhase, ScalperPhase } from '../systems/entityFsm.js';
 import { clamp, clamp01, fmtTime, lerpPose, smooth, mod } from '../core/utils.js';
 import { isLightGreen } from '../systems/trafficSystem.js';
-import { getTargetCars } from '../systems/spawnSystem.js';
+import { getServedHudText } from '../systems/spawnSystem.js';
 import { UI } from './hud.js';
 import { drawDebugOverlay } from '../debug/debugOverlay.js';
 
@@ -205,9 +205,8 @@ function draw() {
   ctx.font = '800 44px system-ui';
   let wm = 'FUEL', wm2 = 'DEFENSE';
   if (Game.state === 'play') {
-    const target = getTargetCars();
-    wm = Game.stats.served + ' / ' + target;
-    wm2 = Game.mode === 'endless' ? 'бесконечный уровень ' + Game.levelIdx : 'обслужено';
+    wm = getServedHudText();
+    wm2 = Game.mode === 'endless' ? 'ENDLESS' : 'КАМПАНИЯ';
   }
   ctx.fillText(wm, cx, cy + 52);
   ctx.font = '700 13px system-ui';

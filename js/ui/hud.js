@@ -4,10 +4,13 @@ import { fmtTime, clamp } from '../core/utils.js';
 import { fmtRub } from '../core/currency.js';
 import { GameVersion } from '../config/gameVersion.js';
 import { innerLaneList, isLightGreen } from '../systems/trafficSystem.js';
-import { getTargetCars } from '../systems/spawnSystem.js';
-import { tankerDeliveryCost, canOrderTanker } from '../systems/economySystem.js';
+import { getServedHudText } from '../systems/spawnSystem.js';
 import { canDispatchTanker, tankerButtonSub } from '../systems/tankerLogistics.js';
 import { gbrButtonSub, gbrCallCost, canDispatchGbr } from '../systems/gbrLogistics.js';
+import { refreshTankerOrderQuote, isTankerOrderOpen } from './tankerOrderMenu.js';
+import {
+  getUnlocked, setUnlocked, migrateCampaignSave, isEndlessUnlocked, getEndlessBest
+} from '../systems/campaignSave.js';
 
 export const UI = {};
 
@@ -50,12 +53,11 @@ function bindLongTap(el, onShort, onLong, holdMs = 450) {
   });
 }
 
-function getUnlocked() {
-  try { return clamp(parseInt(localStorage.getItem('fd_unlocked')) || 1, 1, CONFIG.levels.length); }
-  catch (e) { return 1; }
+function getUnlockedLevel() {
+  return getUnlocked();
 }
-function setUnlocked(n) {
-  try { localStorage.setItem('fd_unlocked', String(n)); } catch (e) { }
+function setUnlockedLevel(n) {
+  setUnlocked(n);
 }
 
 function resize() {
@@ -71,10 +73,10 @@ function resize() {
 }
 
 function updateHUD() {
-  UI.statMoney.textContent = '💰 ' + fmtRub(Game.money);
+  UI.statMoney.textContent = '💰 ' + fmtRub(Game.money) +
+    (Game.bonuses > 0 ? ' · ★' + Math.round(Game.bonuses) : '');
   if (Game.state === 'play') {
-    const target = getTargetCars();
-    UI.statTime.textContent = '⛽ ' + Game.stats.served + ' / ' + target;
+    UI.statTime.textContent = '⛽ ' + getServedHudText();
   } else {
     UI.statTime.textContent = '⏱ —';
   }
@@ -91,16 +93,12 @@ function updateHUD() {
   UI.statTraffic.textContent = '🚗 ' + inner.length + '+' + holdN + ' · ' + txt;
   UI.statTraffic.style.color = col;
 
-  // бензовоз — стоимость, таймер подготовки или «Готов»
-  const deliveryCost = tankerDeliveryCost();
-  UI.tankerSub.textContent = tankerButtonSub(deliveryCost, fmtRub);
-  if (!canDispatchTanker()) {
-    UI.btnTanker.disabled = true;
-  } else if (!canOrderTanker()) {
-    UI.btnTanker.disabled = true;
-  } else {
-    UI.btnTanker.disabled = Game.state !== 'play';
-  }
+  // бензовоз — Готов / Подготовка; красный если доступен
+  UI.tankerSub.textContent = tankerButtonSub();
+  const tankerReady = canDispatchTanker() && Game.state === 'play';
+  UI.btnTanker.disabled = !tankerReady;
+  if (tankerReady) UI.btnTanker.classList.add('tanker-ready');
+  else UI.btnTanker.classList.remove('tanker-ready');
 
   // ГБР — стоимость, READY или таймер подготовки
   UI.gbrSub.textContent = gbrButtonSub(fmtRub);
@@ -127,10 +125,13 @@ function updateHUD() {
     UI.btnLight.classList.remove('red-mode');
     UI.lightSub.textContent = 'стоп 10с';
   }
+
+  if (isTankerOrderOpen()) refreshTankerOrderQuote();
 }
 
 function renderMenu() {
-  const unlocked = getUnlocked();
+  migrateCampaignSave();
+  const unlocked = getUnlockedLevel();
   let html = '';
   for (let i = 1; i <= CONFIG.levels.length; i++) {
     const locked = i > unlocked;
@@ -138,6 +139,24 @@ function renderMenu() {
       (locked ? '🔒' : i) + '</button>';
   }
   UI.levelRow.innerHTML = html;
+  const endlessSection = document.getElementById('endless-section');
+  const endlessBtn = document.getElementById('btn-endless');
+  const endlessRecord = document.getElementById('endless-record');
+  if (endlessSection && endlessBtn) {
+    if (isEndlessUnlocked()) {
+      endlessSection.classList.remove('hidden');
+      endlessBtn.disabled = false;
+      const best = getEndlessBest();
+      endlessBtn.textContent = '∞ Бесконечный режим';
+      if (endlessRecord) {
+        endlessRecord.textContent = best > 0 ? 'Рекорд: ' + best + ' машин' : '';
+      }
+    } else {
+      endlessSection.classList.add('hidden');
+      endlessBtn.disabled = true;
+      if (endlessRecord) endlessRecord.textContent = '';
+    }
+  }
   renderPatchNotes();
 }
 
@@ -215,4 +234,5 @@ function showMenu() {
   UI.screenStart.classList.remove('hidden');
 }
 
-export { bindTap, bindLongTap, getUnlocked, setUnlocked, resize, updateHUD, renderMenu, showMenu, markVersionSeen, renderPatchNotes };
+export { bindTap, bindLongTap, getUnlockedLevel as getUnlocked, setUnlockedLevel as setUnlocked,
+  resize, updateHUD, renderMenu, showMenu, markVersionSeen, renderPatchNotes };

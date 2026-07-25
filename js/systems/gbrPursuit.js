@@ -8,7 +8,7 @@ import {
 } from './gbrLogistics.js';
 import { addFloat } from './economySystem.js';
 import { fmtRubDelta } from '../core/currency.js';
-import { GbrPhase, setGbrPhase } from './entityFsm.js';
+import { GbrPhase, ScalperPhase, setGbrPhase } from './entityFsm.js';
 
 let nextScalperId = 1;
 const MAX_LOG = 60;
@@ -37,9 +37,37 @@ function vehicleWorldPos(v) {
 }
 
 export function findUnpursuedWantedScalpers() {
-  return Game.vehicles.filter(v =>
-    v.kind === 'scalper' && v.wanted && !v.pursuedBy
-  );
+  return Game.vehicles.filter(isScalperAssignableWanted);
+}
+
+/** Разыскиваемый перекуп, ещё на карте, без экипажа (включая EXITING). */
+export function isScalperAssignableWanted(sc) {
+  if (!sc || sc.kind !== 'scalper') return false;
+  if (!sc.wanted || sc.pursuedBy) return false;
+  if (sc.scalperPhase === ScalperPhase.ARRESTING) return false;
+  if (sc.scalperPhase === ScalperPhase.DESPAWN) return false;
+  return Game.vehicles.includes(sc);
+}
+
+/** Ближайший разыскиваемый без экипажа к данной ГБР (тай-брейк: раньше объявлен). */
+export function findNearestUnpursuedWantedFor(g) {
+  const wanted = findUnpursuedWantedScalpers();
+  if (!wanted.length || !g) return null;
+  const pg = vehicleWorldPos(g);
+  let best = null;
+  let bestD = Infinity;
+  let bestWantedAt = Infinity;
+  for (const sc of wanted) {
+    const ps = vehicleWorldPos(sc);
+    const d = Math.hypot(ps.x - pg.x, ps.y - pg.y);
+    const wa = sc.wantedAt != null ? sc.wantedAt : Infinity;
+    if (d < bestD - 0.5 || (Math.abs(d - bestD) <= 0.5 && wa < bestWantedAt)) {
+      best = sc;
+      bestD = d;
+      bestWantedAt = wa;
+    }
+  }
+  return best;
 }
 
 export function getScalperById(id) {
@@ -47,9 +75,32 @@ export function getScalperById(id) {
   return Game.vehicles.find(v => v.kind === 'scalper' && v.scalperId === id) || null;
 }
 
+/** Перекуп ещё физически в игровом мире (до DESPAWN). */
+export function isAssignedScalperOnMap(sc) {
+  return !!sc && Game.vehicles.includes(sc) && sc.scalperPhase !== ScalperPhase.DESPAWN;
+}
+
+/** Назначенная цель ГБР по id — связь не зависит от фазы/владельца. */
+export function isGbrAssignedTarget(g, sc) {
+  if (!g || !sc || g.targetScalperId == null) return false;
+  return sc.scalperId === g.targetScalperId;
+}
+
 export function getGbrTarget(g) {
   if (!g?.targetScalperId) return g?.chaseTarget || null;
-  return getScalperById(g.targetScalperId) || g.chaseTarget || null;
+  const sc = getScalperById(g.targetScalperId);
+  if (sc) {
+    g.chaseTarget = sc;
+    return sc;
+  }
+  return g.chaseTarget || null;
+}
+
+/** Активная назначенная цель преследования или null (объект удалён). */
+export function gbrPursuitTarget(g) {
+  const sc = getGbrTarget(g);
+  if (!sc || !isGbrAssignedTarget(g, sc) || !isAssignedScalperOnMap(sc)) return null;
+  return sc;
 }
 
 export function gbrDistanceToTarget(g) {
@@ -86,7 +137,7 @@ export function findNearestFreeGbrFor(sc) {
 }
 
 export function assignGbrTarget(g, sc) {
-  if (!g || !sc || !sc.wanted || sc.pursuedBy) return false;
+  if (!g || !isScalperAssignableWanted(sc)) return false;
   ensureScalperId(sc);
   g.targetScalperId = sc.scalperId;
   g.chaseTarget = sc;
@@ -97,12 +148,15 @@ export function assignGbrTarget(g, sc) {
   return true;
 }
 
-export function releaseGbrTarget(g) {
+export function releaseGbrTarget(g, opts) {
   if (!g) return;
+  opts = opts || {};
   const sc = getGbrTarget(g);
   if (sc && sc.pursuedBy === g.fleetId) {
     sc.pursuedBy = null;
-    logPursuitEvent('[GBR #' + g.fleetId + '] Target lost');
+    if (opts.reason === 'despawn') {
+      logPursuitEvent('[GBR #' + g.fleetId + '] Target lost');
+    }
   }
   g.targetScalperId = null;
   g.chaseTarget = null;
@@ -116,6 +170,17 @@ export function assignWantedToNearestFreeGbr() {
     const g = findNearestFreeGbrFor(sc);
     if (g) assignGbrTarget(g, sc);
   }
+}
+
+/** Назначить данной ГБР ближайшую свободную цель (или preferred). */
+export function assignSpawnGbrTarget(g, preferredScalper) {
+  if (!g) return false;
+  if (preferredScalper && isScalperAssignableWanted(preferredScalper)) {
+    return assignGbrTarget(g, preferredScalper);
+  }
+  const sc = findNearestUnpursuedWantedFor(g);
+  if (sc) return assignGbrTarget(g, sc);
+  return false;
 }
 
 export function spawnGbrUnit(cost, msgPos, preferredScalper) {
@@ -139,10 +204,9 @@ export function spawnGbrUnit(cost, msgPos, preferredScalper) {
   attachVehicleToGbr(unit, g);
   Game.vehicles.push(g);
   Game.gbr.unit = g;
-  if (preferredScalper?.wanted && !preferredScalper.pursuedBy) {
-    assignGbrTarget(g, preferredScalper);
-  } else {
-    assignWantedToNearestFreeGbr();
+  logPursuitEvent('[GBR #' + g.fleetId + '] Spawned');
+  if (!assignSpawnGbrTarget(g, preferredScalper)) {
+    logPursuitEvent('[GBR #' + g.fleetId + '] PATROL');
   }
   if (msgPos) addFloat(msgPos.x, msgPos.y, fmtRubDelta(-cost) + ' ГБР', '#42a5f5');
   return g;
@@ -176,8 +240,8 @@ export function onScalperTheftDetected(station, scalper) {
   const slot = station?.slot || scalper?.targetSlot;
   scalper.wanted = true;
   scalper.crimeStarted = true;
+  if (scalper.wantedAt == null) scalper.wantedAt = Game.time;
   scalper.alarmStationId = slot?.i ?? null;
-  scalper.pursuedBy = null;
   if (station) station.gbrAlarm = 1.5;
   logPursuitEvent('[SCALPER] Theft detected');
   logPursuitEvent('[SCALPER] Wanted = TRUE');
@@ -195,18 +259,17 @@ export function manualCallGbr(msgPos) {
 
 export function clearScalperWanted(sc) {
   if (!sc) return;
-  sc.wanted = false;
   if (sc.pursuedBy) {
     const g = Game.vehicles.find(v => v.kind === 'gbr' && v.fleetId === sc.pursuedBy);
-    if (g) releaseGbrTarget(g);
+    if (g) releaseGbrTarget(g, { reason: 'despawn' });
+  } else {
+    sc.pursuedBy = null;
   }
-  sc.pursuedBy = null;
+  sc.wanted = false;
 }
 
 export function onScalperExitReached(sc) {
   logPursuitEvent('[SCALPER] Exit reached');
-  clearScalperWanted(sc);
-  logPursuitEvent('[SCALPER] Exit');
 }
 
 export function onGbrArrestStarted(g, sc) {
@@ -215,7 +278,6 @@ export function onGbrArrestStarted(g, sc) {
 
 export function onGbrArrestComplete(g, sc) {
   if (g?.fleetId) logPursuitEvent('[GBR #' + g.fleetId + '] Arrest complete');
-  if (sc) clearScalperWanted(sc);
 }
 
 export function onScalperLeavingStation(sc, g) {

@@ -14,7 +14,9 @@ function innerLaneList() {
 }
 
 function outerLaneList() {
-  return Game.vehicles.filter(v => v.lane === 'outer' && v.state === 'drive');
+  return Game.vehicles.filter(v =>
+    v.lane === 'outer' && v.state === 'drive' &&
+    !(v.kind === 'scalper' && v.scalperPhase === 'exiting'));
 }
 
 function spawnClear(list, len) {

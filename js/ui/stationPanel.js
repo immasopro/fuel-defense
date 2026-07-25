@@ -12,7 +12,19 @@ import {
 } from '../systems/upgradeSystem.js';
 import { tankerDeliveryCost, tankerTruckCapacity } from '../systems/economySystem.js';
 import { gbrPatrolSpeed, gbrCallCost, gbrFleetPanelLines } from '../systems/gbrLogistics.js';
+import { canAffordWithBonus, stationBonusShare, depotBonusShare } from '../systems/fuelOrderSystem.js';
+import { quoteFuelOrder } from '../systems/fuelOrderSystem.js';
 import { UI } from './hud.js';
+
+function canPayStation(c) {
+  return c != null && canAffordWithBonus(c, stationBonusShare());
+}
+function canPayDepot(c) {
+  return c != null && canAffordWithBonus(c, depotBonusShare());
+}
+function canPayCash(c) {
+  return c != null && Game.money >= c;
+}
 
 function handleTap(clientX, clientY) {
   if (Game.state !== 'play') return;
@@ -61,24 +73,24 @@ function openDepotPanel() {
   let html = '<div class="p-title">Нефтебаза · ур. ' + Game.depot.level + '</div>';
   html += '<div class="p-info">Запас: <b><span id="p-depot-res">' + Math.round(Game.depot.res) +
     '</span> / ' + Game.depot.cap + ' л</b><br>Отдача: <b>' + Math.round(Depot.deliveryRate()) +
-    ' л/с</b> (делится между АЗС)<br>Рейс бензовоза: <b><span id="p-next-delivery">' +
-    fmtRub(tankerDeliveryCost()) + '</span></b> · ' + tankerTruckCapacity() + ' л</div>';
+    ' л/с</b> (делится между АЗС)<br>Рейс (100%): <b><span id="p-next-delivery">' +
+    fmtRub(quoteFuelOrder(100).cost) + '</span></b> · ' + tankerTruckCapacity() + ' л</div>';
   if (uc != null) {
     html += '<div class="p-row"><button class="p-btn" data-act="depot-up"' +
-      (Game.money < uc ? ' disabled' : '') + '>⬆ Нефтебаза<span class="cost">' + fmtRub(uc) +
+      (!canPayDepot(uc) ? ' disabled' : '') + '>⬆ Нефтебаза<span class="cost">' + fmtRub(uc) +
       ' → ' + CONFIG.depot.levels[Game.depot.level] + ' л</span></button></div>';
   }
   html += '<div class="p-info">Бензовоз · ур. ' + Game.tankerTruck.level + ' · ' +
     tankerTruckCapacity() + ' л/рейс</div>';
   if (tuc != null) {
     html += '<div class="p-row"><button class="p-btn" data-act="tanker-up"' +
-      (Game.money < tuc ? ' disabled' : '') + '>⬆ Бензовоз<span class="cost">' + fmtRub(tuc) +
+      (!canPayCash(tuc) ? ' disabled' : '') + '>⬆ Бензовоз<span class="cost">' + fmtRub(tuc) +
       ' → ' + CONFIG.tankerTruck.levels[Game.tankerTruck.level] + ' л</span></button></div>';
   }
   html += '<div class="p-info">Автопарк · ' + CONFIG.fleet.maxCount[Game.fleet.level - 1] + ' маш.</div>';
   if (fuc != null) {
     html += '<div class="p-row"><button class="p-btn" data-act="fleet-up"' +
-      (Game.money < fuc ? ' disabled' : '') + '>⬆ Автопарк<span class="cost">' + fmtRub(fuc) +
+      (!canPayCash(fuc) ? ' disabled' : '') + '>⬆ Автопарк<span class="cost">' + fmtRub(fuc) +
       ' → ' + CONFIG.fleet.maxCount[Game.fleet.level] + ' маш.</span></button></div>';
   }
   html += '<button class="p-btn ghost" data-act="close">Закрыть</button>';
@@ -116,7 +128,7 @@ function openBuildPanel(slot) {
     '<div class="p-info">Выберите исходный вид топлива. Остальные можно открыть позже.</div><div class="p-row">';
   for (const key of Object.keys(CONFIG.fuels)) {
     const f = CONFIG.fuels[key];
-    const can = Game.money >= CONFIG.station.cost;
+    const can = canPayStation(CONFIG.station.cost);
     html += '<button class="p-btn fuel-btn" data-act="build" data-fuel="' + key +
       '" style="--c:' + f.color + '"' + (can ? '' : ' disabled') + '>' + f.name +
       '<span class="cost">' + fmtRub(CONFIG.station.cost) + '</span></button>';
@@ -148,7 +160,7 @@ function openStationPanel(slot, sub) {
     const ac = addPumpCost(st);
     html += '<div class="p-grid">';
     html += '<button class="p-btn" data-act="res"' +
-      (rc == null || Game.money < rc ? ' disabled' : '') + '>🛢 Увеличить резервуар<span class="cost">' +
+      (rc == null || !canPayStation(rc) ? ' disabled' : '') + '>🛢 Увеличить резервуар<span class="cost">' +
       (rc == null ? 'MAX' : fmtRub(rc)) + '</span></button>';
     html += '<button class="p-btn" data-act="sub" data-sub="pump">⚡ Улучшить колонку<span class="cost">выбрать…</span></button>';
     html += '<button class="p-btn" data-act="sub" data-sub="fuel"' +
@@ -159,7 +171,7 @@ function openStationPanel(slot, sub) {
       (ac == null ? 'MAX' : fmtRub(ac)) + '</span></button>';
   const cc = CONFIG.canisterReserve.cost;
   html += '<button class="p-btn" data-act="canres"' +
-    (st.canisterUp || Game.money < cc ? ' disabled' : '') + '>🧴 Резерв канистр<span class="cost">' +
+    (st.canisterUp || !canPayStation(cc) ? ' disabled' : '') + '>🧴 Резерв канистр<span class="cost">' +
     (st.canisterUp ? 'куплено' : fmtRub(cc)) + '</span></button>';
 
   const gac = CONFIG.gbrAutoCall.cost;
@@ -169,7 +181,7 @@ function openStationPanel(slot, sub) {
       '<button class="p-btn small" data-act="gbr-auto-off"' + (!st.gbrAutoCallOn ? ' disabled' : '') + '>ВЫКЛ</button></div>';
   } else {
     html += '<button class="p-btn" data-act="gbr-auto"' +
-      (Game.money < gac ? ' disabled' : '') + '>🚓 Автовызов ГБР<span class="cost">' + fmtRub(gac) + '</span></button>';
+      (!canPayCash(gac) ? ' disabled' : '') + '>🚓 Автовызов ГБР<span class="cost">' + fmtRub(gac) + '</span></button>';
   }
     html += '</div>';
   } else if (sub === 'pump') {
@@ -179,7 +191,7 @@ function openStationPanel(slot, sub) {
       const f = CONFIG.fuels[pump.fuel];
       const c = pumpUpgradeCost(pump);
       html += '<div class="p-row"><button class="p-btn" data-act="uppump" data-j="' + j + '"' +
-        (c == null || Game.money < c ? ' disabled' : '') +
+        (c == null || !canPayStation(c) ? ' disabled' : '') +
         ' style="border-left:4px solid ' + f.color + '">Колонка ' + (j + 1) + ' · ' + f.short +
         ' · ур.' + pump.level + '/5 · ' + pump.rate + ' л/с<span class="cost">' +
         (c == null ? 'MAX' : fmtRub(c) + ' → ' + CONFIG.pump.rates[pump.level] + ' л/с') +
@@ -193,7 +205,7 @@ function openStationPanel(slot, sub) {
       if (st.unlocked.includes(key)) continue;
       const f = CONFIG.fuels[key];
       html += '<button class="p-btn fuel-btn" data-act="unlock" data-fuel="' + key +
-        '" style="--c:' + f.color + '"' + (fc == null || Game.money < fc ? ' disabled' : '') +
+        '" style="--c:' + f.color + '"' + (fc == null || !canPayStation(fc) ? ' disabled' : '') +
         '>' + f.name + '<span class="cost">' + fmtRub(fc) + '</span></button>';
     }
     html += '</div><button class="p-btn ghost" data-act="back">← Назад</button>';
@@ -204,7 +216,7 @@ function openStationPanel(slot, sub) {
     for (const key of st.unlocked) {
       const f = CONFIG.fuels[key];
       html += '<button class="p-btn fuel-btn" data-act="addpump" data-fuel="' + key +
-        '" style="--c:' + f.color + '"' + (ac == null || Game.money < ac ? ' disabled' : '') +
+        '" style="--c:' + f.color + '"' + (ac == null || !canPayStation(ac) ? ' disabled' : '') +
         '>' + f.name + '<span class="cost">' + fmtRub(ac) + '</span></button>';
     }
     html += '</div><button class="p-btn ghost" data-act="back">← Назад</button>';

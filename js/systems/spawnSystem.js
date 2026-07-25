@@ -1,13 +1,15 @@
 import { CONFIG } from '../config/index.js';
-import { SPAWN_START_INTERVAL } from '../config/levels.js';
+import {
+  SPAWN_START_INTERVAL, SPAWN_RAMP_FRAC, ENDLESS_SPAWN, campaignMaxSpawnInterval
+} from '../config/levels.js';
 import { Game } from '../core/gameState.js';
 import { Road } from '../world/roadNetwork.js';
 import { GBRBase, sortedStationSlots, Depot } from '../world/map.js';
-import { clamp01, lerp, rand } from '../core/utils.js';
+import { clamp01, rand } from '../core/utils.js';
 import { makeCar, makeTanker } from '../vehicles/vehicleFactory.js';
 import { setTankerPhase, TankerPhase } from './entityFsm.js';
 import { addToHolder, onHolderChanged, fillHolderSlot } from './trafficSystem.js';
-import { addFloat, tankerDeliveryCost, canOrderTanker } from './economySystem.js';
+import { addFloat, tankerDeliveryCost, tankerDeliveryLiters, canOrderTanker } from './economySystem.js';
 import { fmtRubDelta, fmtRub } from '../core/currency.js';
 import {
   canDispatchTanker, findReadyTruck, attachVehicleToTruck
@@ -17,26 +19,38 @@ import {
 } from './gbrLogistics.js';
 import { manualCallGbr } from './gbrPursuit.js';
 
+function hasLevelTarget() {
+  return Game.mode === 'campaign';
+}
+
 function getTargetCars() {
-  const cfg = Game.modeCfg;
-  if (Game.mode === 'endless') {
-    const lvl = Math.max(11, Game.levelIdx || 11);
-    return cfg.baseTarget + (lvl - 10) * cfg.targetStep;
-  }
-  return cfg.targetCars;
+  if (!hasLevelTarget()) return null;
+  return Game.modeCfg.targetCars;
 }
 
 function getEndSpawnInterval() {
+  if (Game.mode === 'endless') return ENDLESS_SPAWN.minInterval;
+  return campaignMaxSpawnInterval(Game.levelIdx || 1);
+}
+
+/** 0…1 — доля разгона спавна (1 = максимальная скорость). */
+function spawnRampProgress() {
   if (Game.mode === 'endless') {
-    const lvl = Math.max(11, Game.levelIdx || 11);
-    return Math.max(0.60, 1.0 - (lvl - 10) * 0.03);
+    return clamp01(Game.stats.served / ENDLESS_SPAWN.rampCars);
   }
-  return Game.modeCfg.endInterval;
+  const target = getTargetCars();
+  if (!target) return 0;
+  const p = Game.stats.served / target;
+  if (p >= SPAWN_RAMP_FRAC) return 1;
+  return clamp01(p / SPAWN_RAMP_FRAC);
 }
 
 function levelProgress() {
+  if (Game.mode === 'endless') {
+    return clamp01(Game.stats.served / ENDLESS_SPAWN.rampCars);
+  }
   const target = getTargetCars();
-  if (target <= 0) return 0;
+  if (!target) return 0;
   return clamp01(Game.stats.served / target);
 }
 
@@ -47,8 +61,16 @@ function currentDiff() {
 function currentSpawnInterval() {
   const start = SPAWN_START_INTERVAL;
   const end = getEndSpawnInterval();
-  const progress = levelProgress();
-  return start - (start - end) * progress;
+  const ramp = spawnRampProgress();
+  return start - (start - end) * ramp;
+}
+
+function getServedHudText() {
+  if (Game.mode === 'endless') {
+    return Game.stats.served + ' обслужено';
+  }
+  const target = getTargetCars();
+  return Game.stats.served + ' / ' + target;
 }
 
 function tickSpawnPipeline(dt, diff) {
@@ -84,9 +106,9 @@ function scalperCooldown() {
   return currentSpawnInterval() * CONFIG.scalper.spawnIntervalMult;
 }
 
-function callTanker() {
-  if (Game.state !== 'play') return;
-  if (!sortedStationSlots().length) return;
+function callTanker(order) {
+  if (Game.state !== 'play') return false;
+  if (!sortedStationSlots().length) return false;
   if (!canDispatchTanker()) {
     const p = Depot.pos || Road.posAt(Road.spawnS, 0);
     if (!findReadyTruck()) {
@@ -94,23 +116,36 @@ function callTanker() {
     } else if (!canOrderTanker()) {
       addFloat(p.x, p.y - 30, 'Недостаточно кредитного лимита для закупки топлива', '#ef5350');
     }
-    return;
+    return false;
   }
   const truck = findReadyTruck();
-  const cost = tankerDeliveryCost();
-  if (!canOrderTanker()) {
+  const liters = order?.liters != null ? order.liters : tankerDeliveryLiters();
+  const cost = order?.cost != null ? order.cost : tankerDeliveryCost();
+  const bonuses = order?.bonuses != null ? order.bonuses : 0;
+  // Меню заказа (явный order.cost): только при наличии денег. Без order — кредит как раньше.
+  if (order != null && order.cost != null) {
+    if (Game.money < cost) {
+      const p = Depot.pos || Road.posAt(Road.spawnS, 0);
+      addFloat(p.x, p.y - 30, 'Недостаточно средств для закупки', '#ef5350');
+      return false;
+    }
+  } else if (!canOrderTanker(undefined, cost)) {
     const p = Depot.pos || Road.posAt(Road.spawnS, 0);
     addFloat(p.x, p.y - 30, 'Недостаточно кредитного лимита для закупки топлива', '#ef5350');
-    return;
+    return false;
   }
   Game.money -= cost;
-  const t = makeTanker(truck.id);
+  if (bonuses > 0) {
+    Game.bonuses = (Game.bonuses || 0) + bonuses;
+  }
+  const t = makeTanker(truck.id, liters);
   setTankerPhase(t, TankerPhase.SPAWNING);
   addToHolder(t, { priority: true, countsForDefeat: false });
   attachVehicleToTruck(truck, t);
   Game.tanker.unit = t;
   const spawnP = Road.posAt(Road.spawnS, 0);
   addFloat(spawnP.x, spawnP.y - 18, fmtRubDelta(-cost) + ' топливо', '#fdd835');
+  return true;
 }
 
 function callGBR() {
@@ -128,7 +163,7 @@ function callGBR() {
 }
 
 export {
-  getTargetCars, getEndSpawnInterval, levelProgress,
-  currentDiff, currentSpawnInterval, scalperCooldown,
+  getTargetCars, hasLevelTarget, getEndSpawnInterval, levelProgress, spawnRampProgress,
+  currentDiff, currentSpawnInterval, getServedHudText, scalperCooldown,
   tickSpawnPipeline, callTanker, callGBR
 };

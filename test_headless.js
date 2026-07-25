@@ -38,9 +38,13 @@ globalThis.document = {
   exitFullscreen: () => {}
 };
 globalThis.requestAnimationFrame = globalThis.window.requestAnimationFrame;
-globalThis.localStorage = { getItem: () => null, setItem: () => {} };
-
-globalThis.localStorage = { getItem: () => null, setItem: () => {} };
+const lsStore = {};
+globalThis.localStorage = {
+  getItem: k => (k in lsStore ? lsStore[k] : null),
+  setItem: (k, v) => { lsStore[k] = String(v); },
+  removeItem: k => { delete lsStore[k]; },
+  clear: () => { Object.keys(lsStore).forEach(k => delete lsStore[k]); }
+};
 
 const { FD } = await import('./js/main.js');
 const { update } = await import('./js/game.js');
@@ -402,28 +406,57 @@ assert(st.pocket.indexOf(ghost) < 0, 'cleanupVehicle clears pocket ghosts');
 assert(FD.GBRBase.pos && FD.GBRBase.spawnS > 0, 'GBR base exists');
 assert(!CONFIG.bgTrafficEnabled, 'neutral traffic disabled');
 
-// v0.2.1 progression: cars served, spawn ramp
+// v0.4.0 — кампания 20 уровней, динамический спавн, Endless
+const { spawnRampProgress, hasLevelTarget, getServedHudText } =
+  await import('./js/systems/spawnSystem.js');
+const { CAMPAIGN_LEVEL_COUNT, campaignMaxSpawnInterval, ENDLESS_SPAWN } =
+  await import('./js/config/levels.js');
+assert(CONFIG.levels.length === 20, 'campaign has 20 levels');
+assert(CAMPAIGN_LEVEL_COUNT === 20, 'CAMPAIGN_LEVEL_COUNT 20');
+
 FD.newGame('campaign', 1);
 assert(getTargetCars() === 100, 'level 1 target 100 cars');
 assert(currentSpawnInterval() === 4.0, 'level starts at 4s spawn interval');
-Game.stats.served = 100;
-assert(currentSpawnInterval() === 2.5, 'level 1 ends at 2.5s spawn interval');
-assert(levelProgress() === 1, 'progress at target');
-
-FD.newGame('campaign', 5);
-Game.stats.served = 50;
+Game.stats.served = 80;
+assert(Math.abs(currentSpawnInterval() - 2.0) < 0.01, 'level 1 at 80% progress max spawn');
+assert(spawnRampProgress() === 1, 'ramp complete at 80% served');
+Game.stats.served = 40;
 const midIv = currentSpawnInterval();
-assert(midIv > 2.0 && midIv < 4.0, 'spawn interval ramps within level');
+assert(Math.abs(midIv - 3.0) < 0.01, 'spawn interval ramps at 40% (half ramp)');
+assert(getServedHudText() === '40 / 100', 'campaign HUD text');
 
-FD.newGame('endless', 11);
-assert(getTargetCars() === 1100, 'endless level 11 target 1100');
-const { getEndSpawnInterval } = await import('./js/systems/spawnSystem.js');
-assert(Math.abs(getEndSpawnInterval() - 0.97) < 0.01, 'endless level 11 end spawn 0.97s');
+FD.newGame('campaign', 6);
+assert(getTargetCars() === 360, 'level 6 target 360');
+assert(campaignMaxSpawnInterval(6) === 1.5, 'level 6 max interval 1.5s');
+Game.stats.served = 288;
+assert(Math.abs(currentSpawnInterval() - 1.5) < 0.01, 'level 6 at 80% on max spawn');
 
-FD.newGame('endless', 15);
-assert(getTargetCars() === 1900, 'endless level 15 target +200 per level');
+FD.newGame('campaign', 10);
+assert(getTargetCars() === 1000, 'level 10 target 1000');
+assert(campaignMaxSpawnInterval(10) === 1.0, 'level 10+ max 1s interval');
 
-// v0.3.2 GBR — преследование, не перехват на дороге
+FD.newGame('campaign', 20);
+assert(getTargetCars() === 5000, 'level 20 target 5000');
+
+FD.newGame('endless');
+assert(getTargetCars() === null, 'endless has no target');
+assert(hasLevelTarget() === false, 'endless hasLevelTarget false');
+assert(currentSpawnInterval() === 4.0, 'endless starts 4s');
+Game.stats.served = 10000;
+assert(Math.abs(currentSpawnInterval() - ENDLESS_SPAWN.minInterval) < 0.01, 'endless max at 10k');
+Game.stats.served = 5000;
+assert(Math.abs(currentSpawnInterval() - 2.1667) < 0.02, 'endless linear at 5k');
+assert(getServedHudText() === '5000 обслужено', 'endless HUD text');
+
+const { tryUpdateEndlessBest, getEndlessBest, setEndlessBest, setEndlessUnlocked } =
+  await import('./js/systems/campaignSave.js');
+setEndlessBest(0);
+assert(tryUpdateEndlessBest(120), 'new endless record');
+assert(getEndlessBest() === 120, 'endless best saved');
+assert(!tryUpdateEndlessBest(50), 'lower score not a record');
+setEndlessUnlocked(true);
+
+// v0.3.7 GBR — задержание на дороге при CHASE
 FD.newGame('campaign', 1);
 Game.money = 900000;
 FD.actionBuildStation(Road.slots[1], 'a92');
@@ -440,11 +473,14 @@ scG.v = 20;
 scG.totalGot = 40;
 scG.wanted = true;
 scG.crimeStarted = true;
+scG.scalperId = 42;
 Game.scalper.unit = scG;
 const { ScalperPhase, GbrPhase, setScalperPhase, setGbrPhase } = await import('./js/systems/entityFsm.js');
 setScalperPhase(scG, ScalperPhase.DRIVING);
 const { makeGBR } = await import('./js/vehicles/vehicleFactory.js');
-const { initGbrOnSpawn, gbrSeesScalper, decideAfterArrestExit } = await import('./js/systems/specialVehicles.js');
+const { initGbrOnSpawn, gbrSeesScalper, decideAfterArrestExit, gbrCanArrestNow } =
+  await import('./js/systems/specialVehicles.js');
+const { assignGbrTarget } = await import('./js/systems/gbrPursuit.js');
 const { completeStationExit, ScalperOwner, assertRoadHandoffInvariants, handoffScalperToRoad,
   beginStationExit, scalperMovementDebug, isVehicleInUpdateLane } =
   await import('./js/systems/scalperLifecycle.js');
@@ -452,7 +488,7 @@ const gbrRing = makeGBR();
 initGbrOnSpawn(gbrRing);
 gbrRing.lane = 'inner';
 gbrRing.state = 'drive';
-gbrRing.s = scG.s;
+gbrRing.s = modS(scG.s + 150, L);
 gbrRing.prevS = gbrRing.s;
 gbrRing.v = 30;
 gbrRing.maxV = CONFIG.gbrBase.speeds[0];
@@ -461,9 +497,74 @@ Game.vehicles = [scG, gbrRing];
 assert(CONFIG.gbrBase.speeds[0] === 100, 'GBR speed 100 px/s');
 assert(gbrRing.gbrPhase === GbrPhase.PATROL, 'GBR starts patrol');
 step(1);
-assert(gbrRing.gbrPhase !== GbrPhase.ARREST, 'GBR does not arrest on road');
-assert(gbrRing.gbrPhase === GbrPhase.CHASE || gbrSeesScalper(gbrRing, scG),
-  'GBR chases or spots scalper in vision');
+assert(gbrRing.gbrPhase !== GbrPhase.ARREST, 'PATROL does not arrest without CHASE');
+gbrRing.s = scG.s;
+gbrRing.prevS = scG.s;
+assignGbrTarget(gbrRing, scG);
+assert(gbrCanArrestNow(gbrRing, scG), 'catch distance within arrest range');
+step(1);
+assert(gbrRing.gbrPhase === GbrPhase.ARREST, 'GBR arrests on road when caught');
+assert(scG.scalperPhase === ScalperPhase.ARRESTING, 'scalper ARRESTING on road');
+
+// v0.4.0.2 — приоритетный обгон ГБР только в CHASE
+const { updateLane, canStartOvertake, isChasePriorityGbr } = await import('./js/vehicles/vehicle.js');
+const { innerLaneList } = await import('./js/systems/trafficSystem.js');
+FD.newGame('campaign', 1);
+const scChase = FD.makeScalper();
+scChase.scalperId = 77;
+scChase.wanted = true;
+scChase.crimeStarted = true;
+scChase.lane = 'inner';
+scChase.state = 'drive';
+scChase.s = 800;
+scChase.prevS = 800;
+scChase.v = 55;
+scChase.maxV = 55;
+setScalperPhase(scChase, ScalperPhase.DRIVING);
+const slowCar = FD.makeCar(0);
+slowCar.lane = 'inner';
+slowCar.state = 'drive';
+slowCar.s = 500;
+slowCar.prevS = 500;
+slowCar.v = 20;
+slowCar.maxV = 25;
+slowCar.len = 22;
+const gbrChase = makeGBR(1);
+initGbrOnSpawn(gbrChase);
+gbrChase.lane = 'inner';
+gbrChase.state = 'drive';
+gbrChase.s = 470;
+gbrChase.prevS = 470;
+gbrChase.v = 40;
+gbrChase.maxV = 100;
+Game.vehicles = [scChase, slowCar, gbrChase];
+assert(!isChasePriorityGbr(gbrChase), 'PATROL is not chase priority');
+assert(!canStartOvertake(gbrChase, slowCar, 50, CONFIG.follow), 'PATROL does not overtake from far gap');
+assignGbrTarget(gbrChase, scChase);
+assert(gbrChase.gbrPhase === GbrPhase.CHASE, 'CHASE after assign');
+assert(isChasePriorityGbr(gbrChase), 'CHASE has priority driving');
+assert(canStartOvertake(gbrChase, slowCar, 50, CONFIG.follow), 'CHASE overtakes from far gap');
+assert(canStartOvertake(gbrChase, slowCar, 12, CONFIG.follow), 'CHASE overtakes slow civilian');
+assert(!canStartOvertake(gbrChase, scChase, 12, CONFIG.follow), 'CHASE does not overtake own target');
+let startedOvertake = false;
+let returnedToLane = false;
+let passedSlow = false;
+const gbrTrip0 = gbrChase.trip || 0;
+for (let i = 0; i < 240; i++) {
+  updateLane(innerLaneList(), 1 / 60);
+  if (gbrChase.overtake) startedOvertake = true;
+  if (startedOvertake && !gbrChase.overtake && Math.abs(gbrChase.latOff) < 0.5) returnedToLane = true;
+  const ahead = modS(gbrChase.s - slowCar.s);
+  if (ahead > (slowCar.len + gbrChase.len) / 2 && ahead < L / 2) passedSlow = true;
+}
+assert(startedOvertake, 'CHASE starts overtake in dense traffic');
+assert(returnedToLane || !gbrChase.overtake, 'CHASE returns to lane after overtake');
+assert(passedSlow || (gbrChase.trip - gbrTrip0) > 60, 'CHASE advances past slow traffic');
+setGbrPhase(gbrChase, GbrPhase.RETURNING);
+gbrChase.overtake = null;
+gbrChase.overtakeCommitted = false;
+assert(!isChasePriorityGbr(gbrChase), 'RETURNING drops chase priority');
+assert(!canStartOvertake(gbrChase, slowCar, 50, CONFIG.follow), 'RETURNING uses normal overtake distance');
 
 // v0.2.6 GBR + scalper
 FD.newGame('campaign', 1);
@@ -609,19 +710,20 @@ assert(Game.gbr.unit == null, 'gbr cleared on restart');
 assert(Game.tanker.unit == null, 'tanker cleared on restart');
 assert(Game.stats.served === 0 && Game.time === 0, 'progress reset on restart');
 assert(!Game.paused && !Game.menuOpen, 'playing after restart');
-FD.newGame('endless', 14);
+FD.newGame('endless');
 Game.vehicles.push(FD.makeCar(0));
 Game.stats.served = 10;
 restartCurrentLevel();
-assert(Game.mode === 'endless' && Game.levelIdx === 14, 'endless level preserved');
+assert(Game.mode === 'endless' && Game.levelIdx === 0, 'endless mode preserved on restart');
 assert(Game.vehicles.length === 0, 'repeat restart clears vehicles');
 restartCurrentLevel();
 assert(Game.state === 'play', 'consecutive restarts stable');
 
 assert(Game.state === 'play', 'consecutive restarts stable');
 
-// v0.3.5.2 — инварианты ROAD handoff + movement DBG
+// v0.3.6 — автономный EXITING + инварианты handoff
 const { outerLaneList } = await import('./js/systems/trafficSystem.js');
+const { updateScalpersLeavingMap, despawnScalper } = await import('./js/systems/scalperLifecycle.js');
 FD.newGame('campaign', 1);
 FD.actionBuildStation(Road.slots[1], 'a92');
 const scHand = FD.makeScalper();
@@ -632,10 +734,10 @@ scHand.prevS = scHand.s;
 Game.vehicles = [scHand];
 assert(handoffScalperToRoad(scHand), 'handoffScalperToRoad succeeds');
 assert(assertRoadHandoffInvariants(scHand, 'test_handoff'), 'handoff invariants pass');
-assert(outerLaneList().includes(scHand), 'handoff in outerLaneList');
+assert(!outerLaneList().includes(scHand), 'EXITING scalper not in outerLaneList');
 const mv = scalperMovementDebug(scHand);
 assert(mv.phase === 'EXITING' && mv.state === 'drive' && mv.lane === 'outer', 'DBG phase/state/lane');
-assert(mv.move === 'ON' && isVehicleInUpdateLane(scHand), 'MOVE ON after handoff');
+assert(mv.move === 'EXIT' && !isVehicleInUpdateLane(scHand), 'MOVE EXIT after handoff');
 const scExit = FD.makeScalper();
 scExit.fuelKey = 'a92';
 scExit.targetSlot = Road.slots[1];
@@ -652,24 +754,56 @@ scExit.animT = scExit.animDur;
 completeStationExit(scExit);
 assert(assertRoadHandoffInvariants(scExit, 'exit_complete'), 'completeStationExit invariants pass');
 const logBefore = (Game.pursuitEventLog || []).length;
-scHand.lane = 'inner';
-assert(!assertRoadHandoffInvariants(scHand, 'broken_lane'), 'detects lane violation');
-const logAfter = (Game.pursuitEventLog || []).length;
-assert(logAfter > logBefore, 'handoff violation logged');
-scHand.lane = 'outer';
-scHand.state = 'pullOut';
-assert(!assertRoadHandoffInvariants(scHand, 'broken_state'), 'detects state violation');
-const dbgPull = scalperMovementDebug(scHand);
-assert(dbgPull.move === 'OFF', 'MOVE OFF when state pullOut');
+scHand.scalperLeavingMap = false;
+assert(!assertRoadHandoffInvariants(scHand, 'broken_leaving'), 'detects missing scalperLeavingMap');
+scHand.scalperLeavingMap = true;
+scHand.stopS = Road.spawnS;
+assert(!assertRoadHandoffInvariants(scHand, 'broken_stopS'), 'detects stopS during EXITING');
+scHand.stopS = null;
+const leaveLog = (Game.pursuitEventLog || []).some(e => e.msg === '[SCALPER] Leaving map');
+assert(leaveLog, 'Leaving map logged at exit start');
+const scStall = FD.makeScalper();
+handoffScalperToRoad(scStall);
+scStall.s = modS(Road.spawnS - 20, Road.length);
+scStall.prevS = scStall.s;
+scStall.v = 0;
+Game.vehicles = [scStall];
+const removeStall = new Set();
+let stallT = 0;
+while (Game.vehicles.includes(scStall) && stallT < 5) {
+  updateScalpersLeavingMap(1 / 30, Road.length, removeStall);
+  if (removeStall.size) Game.vehicles = Game.vehicles.filter(v => !removeStall.has(v));
+  stallT += 1 / 30;
+}
+assert(!Game.vehicles.includes(scStall), 'EXITING scalper despawns within 5s even at spawnS');
+const scWanted = FD.makeScalper();
+scWanted.wanted = true;
+scWanted.crimeStarted = true;
+handoffScalperToRoad(scWanted);
+assert(scWanted.wanted, 'wanted persists during EXITING');
+scWanted.s = modS(Road.spawnS - 200, Road.length);
+scWanted.prevS = scWanted.s;
+Game.vehicles = [scWanted];
+const removeW = new Set();
+for (let i = 0; i < 15; i++) {
+  updateScalpersLeavingMap(1 / 30, Road.length, removeW);
+  assert(scWanted.wanted, 'wanted persists during EXITING');
+  if (removeW.size) break;
+}
+assert(!removeW.size, 'wanted scalper not despawned in first 0.5s');
+despawnScalper(scWanted, removeW);
+assert(!scWanted.wanted, 'wanted cleared at despawn');
+const despawnLog = (Game.pursuitEventLog || []).some(e => e.msg === '[SCALPER] Despawn complete');
+assert(despawnLog, 'Despawn complete logged');
 
 // version check
 const { compareVersions, isNewerVersion, GAME_VERSION, hasPendingUpdate, _setRemoteVersionForTest } =
   await import('./js/systems/versionCheck.js');
-assert(GAME_VERSION === '0.3.5.2', 'GAME_VERSION 0.3.5.2');
-assert(compareVersions('0.3.5.2', '0.3.5.1') > 0, 'semver newer');
-assert(!isNewerVersion('0.3.5.2'), 'same version not newer');
-assert(isNewerVersion('0.3.6'), '0.3.6 is newer');
-_setRemoteVersionForTest({ version: '0.3.6', notes: ['Тест'] });
+assert(GAME_VERSION === '0.4.1', 'GAME_VERSION 0.4.1');
+assert(compareVersions('0.4.1', '0.4.0.4') > 0, 'semver newer');
+assert(!isNewerVersion('0.4.1'), 'same version not newer');
+assert(isNewerVersion('0.4.2'), '0.4.2 is newer');
+_setRemoteVersionForTest({ version: '0.4.2', notes: ['Тест'] });
 assert(hasPendingUpdate(), 'pending update detected');
 
 // v0.2.8 depot branch + reservoir HUD
@@ -741,7 +875,7 @@ assert(Game.time > 0, 'game advances after rAF frames');
 globalThis.window.requestAnimationFrame = prevRaf;
 
 const { GameVersion } = await import('./js/config/gameVersion.js');
-assert(GameVersion.version === '0.3.5.2', 'GameVersion is 0.3.5.2');
+assert(GameVersion.version === '0.4.1', 'GameVersion is 0.4.1');
 assert(GameVersion.changes.length <= 8, 'patch notes capped at 8 items');
 
 const { StationApi } = await import('./js/systems/stationApi.js');
@@ -816,8 +950,76 @@ assert(tankerDeliveryCost() === 105000, 'tanker level 2 delivery 105000 rub');
 Game.tankerTruck.level = 5;
 assert(tankerDeliveryCost() === 332500, 'tanker level 5 delivery 332500 rub');
 
-// v0.2.10.1 — перекуп не оплачивает кражу
-const { finishScalperFuel, finishFuel, recordScalperTheft } = await import('./js/systems/economySystem.js');
+// v0.4.1 — гибкий заказ топлива и бонусы
+const { quoteFuelOrder, canAffordFuelOrder, payWithBonus, canAffordWithBonus,
+  stationBonusShare, depotBonusShare } = await import('./js/systems/fuelOrderSystem.js');
+FD.newGame('campaign', 1);
+assert(Game.money === 50000, 'start money 50000');
+assert(Game.bonuses === 0, 'bonuses start at 0');
+const q20 = quoteFuelOrder(20);
+assert(q20.liters === 200 && q20.pricePerLiter === 105 && q20.cost === 21000, '20% quote');
+assert(q20.cashbackPct === 10 && q20.bonuses === 2100, '20% cashback');
+const q50 = quoteFuelOrder(50);
+assert(q50.liters === 500 && q50.pricePerLiter === 90 && q50.cost === 45000, '50% quote');
+assert(q50.cashbackPct === 15 && q50.bonuses === 6750, '50% cashback');
+const q90 = quoteFuelOrder(90);
+assert(q90.pricePerLiter === 70 && q90.cashbackPct === 20, '90% price/cashback');
+const q100 = quoteFuelOrder(100);
+assert(q100.liters === 1000 && q100.pricePerLiter === 70 && q100.cost === 70000, '100% quote');
+assert(q100.bonuses === 14000, '100% bonuses');
+assert(quoteFuelOrder(15).percent === 20, 'clamp below 20%');
+assert(quoteFuelOrder(105).percent === 100, 'clamp above 100%');
+assert(quoteFuelOrder(55).percent === 50 || quoteFuelOrder(55).percent === 60, 'snap to step');
+
+FD.newGame('campaign', 1);
+FD.actionBuildStation(Road.slots[0], 'a92');
+readyTanker();
+Game.money = 50000;
+Game.bonuses = 0;
+const moneyB = Game.money;
+assert(FD.callTanker({ liters: 200, cost: 21000, bonuses: 2100 }), 'partial order succeeds');
+assert(Game.money === moneyB - 21000, 'partial cost deducted once');
+assert(Game.bonuses === 2100, 'cashback bonuses once');
+assert(Game.tanker.unit && Game.tanker.unit.load === 200, 'tanker load 200L');
+
+FD.newGame('campaign', 1);
+FD.actionBuildStation(Road.slots[0], 'a92');
+readyTanker();
+Game.money = 10000;
+assert(!canAffordFuelOrder(quoteFuelOrder(100)), 'cannot afford 100%');
+assert(!FD.callTanker({ liters: 1000, cost: 70000, bonuses: 14000 }), 'reject unaffordable order');
+assert(Game.money === 10000 && Game.bonuses === 0, 'no charge when rejected');
+
+FD.newGame('campaign', 1);
+Game.bonuses = 10000;
+const stCost = CONFIG.station.cost;
+assert(canAffordWithBonus(stCost, stationBonusShare()), 'station affordable with bonus share');
+const pay = payWithBonus(stCost, stationBonusShare());
+assert(pay.ok && pay.bonus === Math.min(10000, Math.floor(stCost * 0.3)), 'station bonus share ≤30%');
+assert(Game.bonuses === 10000 - pay.bonus, 'bonuses spent on station');
+
+FD.newGame('campaign', 1);
+Game.money = 100000;
+Game.bonuses = 50000;
+const depotPay = payWithBonus(100000, depotBonusShare());
+assert(depotPay.ok && depotPay.bonus === 20000, 'depot bonus share ≤20%');
+
+const { actionUpgradeTankerTruck } = await import('./js/systems/upgradeSystem.js');
+FD.newGame('campaign', 1);
+const tucCash = CONFIG.tankerTruck.upgradeCosts[0];
+Game.money = tucCash;
+Game.bonuses = 999999;
+assert(actionUpgradeTankerTruck(), 'tanker upgrade cash-only ok');
+assert(Game.bonuses === 999999, 'tanker upgrade does not spend bonuses');
+assert(Game.money === 0, 'tanker upgrade cash deducted');
+
+FD.newGame('campaign', 1);
+Game.paused = false;
+assert(Game.paused === false, 'order menu path does not require pause');
+
+// v0.2.10.1 / v0.4.0.3 — перекуп не оплачивает кражу; stolen только после побега
+const { finishScalperFuel, finishFuel, recordScalperTheft, commitScalperEscapeTheft, forfeitScalperTheft } =
+  await import('./js/systems/economySystem.js');
 const { updateScalperAtColumn } = await import('./js/systems/specialVehicles.js');
 FD.newGame('campaign', 1);
 Game.money = 900000;
@@ -847,12 +1049,13 @@ updateScalperAtColumn(scThief, 1, L);
 assert(Game.money === money0, 'scalper theft no money change');
 assert(Game.stats.earned === earned0, 'scalper theft no earned change');
 assert(Game.stats.liters === liters0, 'scalper theft no commercial liters');
-assert(Game.stats.stolenLiters > 0, 'stolen liters tracked');
-assert(Game.stats.stolenDamage === Game.stats.stolenLiters * CONFIG.fuelCostPerLiter, 'damage formula');
+assert(Game.stats.stolenLiters === 0, 'stolen not counted during fill');
+assert(scThief.totalGot > 0, 'stolen liters held on scalper');
 assert(stSc.res < resBefore, 'station reserve decreased');
 finishScalperFuel(scThief, 50);
 assert(Game.money === money0, 'finishScalperFuel no payment');
-assert(Game.stats.stolenLiters >= 50, 'theft accumulates');
+assert(Game.stats.stolenLiters === 0, 'finishScalperFuel does not count global theft');
+assert(scThief.totalGot >= 50, 'theft accumulates on scalper');
 // обычный клиент по-прежнему платит
 const payCar = FD.makeCar(0);
 payCar.fuelKey = 'a92';
@@ -870,6 +1073,46 @@ setScalperPhase(scThief, ScalperPhase.REFUELING);
 updateScalperAtColumn(scThief, 0.1, L);
 assert(scThief.scalperPhase === ScalperPhase.ESCAPING || scThief.totalGot >= (scThief.maxLiters || 100) - 0.01,
   'scalper escapes after fill');
+
+// v0.4.0.3 — учёт кражи только после успешного побега / не после ареста
+FD.newGame('campaign', 1);
+const scEsc = FD.makeScalper();
+scEsc.totalGot = 100;
+assert(Game.stats.stolenLiters === 0, 'escape scenario starts clean');
+const remEsc = new Set();
+despawnScalper(scEsc, remEsc);
+assert(Game.stats.stolenLiters === 100, 'escape commits 100L stolen');
+assert(Game.stats.stolenDamage === 100 * CONFIG.fuelCostPerLiter, 'damage formula on escape');
+assert(scEsc.theftCommitted, 'escape theft marked committed');
+
+FD.newGame('campaign', 1);
+const scArr = FD.makeScalper();
+scArr.totalGot = 100;
+forfeitScalperTheft(scArr);
+const remArr = new Set();
+despawnScalper(scArr, remArr);
+assert(Game.stats.stolenLiters === 0, 'arrested theft not counted');
+assert(scArr.theftForfeited, 'arrest forfeits theft');
+
+FD.newGame('campaign', 1);
+for (let i = 0; i < 5; i++) {
+  const sc = FD.makeScalper();
+  sc.totalGot = 100;
+  despawnScalper(sc, new Set());
+}
+assert(Game.stats.stolenLiters === 500, 'five escapes reach 500L');
+const { currentScalperMaxLiters: capAfterEscapes } = await import('./js/systems/scalperEvolution.js');
+assert(capAfterEscapes() === 150, '150L tank after 500 escaped liters');
+
+FD.newGame('campaign', 1);
+for (let i = 0; i < 5; i++) {
+  const sc = FD.makeScalper();
+  sc.totalGot = 100;
+  forfeitScalperTheft(sc);
+  despawnScalper(sc, new Set());
+}
+assert(Game.stats.stolenLiters === 0, 'five arrests leave stolen at 0');
+assert(capAfterEscapes() === 100, 'tank stays 100L after arrests only');
 
 // v0.2.10.2 — кулдаун перекупа и скорость ГБР
 const { scalperCooldown } = await import('./js/systems/spawnSystem.js');
@@ -937,10 +1180,10 @@ const migrated = migrateSaveObject({ version: '0.2.11', depot: { level: 2, res: 
 assert(migrated.tankerTruck.level === 1, 'migration tanker level I');
 assert(migrated.fleet.level === 1, 'migration fleet level I');
 assert(migrated.depot.res <= migrated.depot.cap, 'migration clamps fuel');
-assert(isNewerVersion('0.3.6'), 'semver newer');
-assert(!isNewerVersion('0.3.5.2'), 'same version not newer');
+assert(isNewerVersion('0.4.2'), 'semver newer');
+assert(!isNewerVersion('0.4.1'), 'same version not newer');
 _resetVersionNotificationForTest();
-showVersionNotification('0.3.5.2');
+showVersionNotification('0.4.1');
 assert(true, 'version notification once per session');
 
 // v0.3.1.1 — UX бензовозов и подготовка после возврата
@@ -948,11 +1191,10 @@ const { tankerButtonSub, onTankerMissionComplete, nearestTankerPrepSeconds,
   fleetDebugLines } = await import('./js/systems/tankerLogistics.js');
 
 FD.newGame('campaign', 1);
-let sub = tankerButtonSub(70000, n => String(n));
-assert(sub.includes('70000'), 'button shows cost');
+let sub = tankerButtonSub();
 assert(sub.includes('Подготовка'), 'button shows prep timer at start');
 tickTankerLogistics(20);
-sub = tankerButtonSub(70000, n => String(n));
+sub = tankerButtonSub();
 assert(sub.includes('Готов'), 'button shows ready after prep');
 assert(nearestTankerPrepSeconds() == null, 'no prep timer when ready');
 assert(!fleetDebugLines().some(l => l.includes('Не приобретён')), 'debug uses English labels');
@@ -1077,13 +1319,16 @@ assert(gbrPass.stopS == null, 'GBR does not brake for empty scalper');
 
 scEmpty.wanted = true;
 scEmpty.crimeStarted = true;
+scEmpty.scalperId = 77;
 assert(scalperIsGbrTarget(scEmpty), 'crime started becomes target');
 gbrPass.s = scEmpty.s;
 gbrPass.prevS = gbrPass.s;
 setGbrPhase(gbrPass, GbrPhase.CHASE);
 gbrPass.chaseTarget = scEmpty;
+gbrPass.targetScalperId = scEmpty.scalperId;
+scEmpty.pursuedBy = gbrPass.fleetId;
 step(1);
-assert(gbrPass.gbrPhase !== GbrPhase.ARREST, 'GBR does not arrest on road after theft');
+assert(gbrPass.gbrPhase === GbrPhase.ARREST, 'GBR arrests on road after theft when caught');
 
 // v0.3.2.1 — круговое обнаружение, единая очередь, DBG
 const { tryAttachScalperToStation, gbrTargetsInRange } =
@@ -1181,7 +1426,7 @@ FD.newGame('campaign', 1);
 FD.actionBuildStation(Road.slots[0], 'a92');
 readyGbr();
 Game.money = 10000;
-const { onScalperTheftDetected, assignGbrTarget, spawnGbrUnit } =
+const { onScalperTheftDetected, spawnGbrUnit } =
   await import('./js/systems/gbrPursuit.js');
 const scAlarm = FD.makeScalper();
 scAlarm.targetSlot = Road.slots[0];
@@ -1202,6 +1447,166 @@ Game.vehicles = [gbrDisp];
 step(1);
 assert(gbrDisp.gbrPhase === GbrPhase.PATROL || gbrDisp.gbrPhase === GbrPhase.CHASE,
   'patrol or chase after invalid target');
+
+// v0.3.7 — отмена SERVICE при уезде цели
+FD.newGame('campaign', 1);
+FD.actionBuildStation(Road.slots[1], 'a92');
+const slotFlee = Road.slots[1];
+const scFlee = FD.makeScalper();
+scFlee.fuelKey = 'a92';
+scFlee.targetSlot = slotFlee;
+scFlee.station = slotFlee.station;
+scFlee.pump = scFlee.station.pumps[0];
+scFlee.pump.cars.push(scFlee);
+scFlee.state = 'station';
+scFlee.pose = FD.apronPoseForRank(slotFlee, 0, 0);
+scFlee.totalGot = 12;
+scFlee.wanted = true;
+scFlee.scalperId = 88;
+setScalperPhase(scFlee, ScalperPhase.REFUELING);
+const gbrPull = makeGBR(3);
+initGbrOnSpawn(gbrPull);
+assignGbrTarget(gbrPull, scFlee);
+setGbrPhase(gbrPull, GbrPhase.ENTER_SERVICE_LANE);
+gbrPull.state = 'pullIn';
+gbrPull.animT = 0.1;
+gbrPull.animDur = 2;
+gbrPull.targetSlot = slotFlee;
+gbrPull.chaseResumeS = modS(slotFlee.s + 12, L);
+gbrPull.animFrom = FD.apronPoseForRank(slotFlee, 0, 2);
+gbrPull.animTo = FD.apronPoseForRank(slotFlee, 0, 1);
+Game.vehicles = [scFlee, gbrPull];
+scFlee.pump.cars = scFlee.pump.cars.filter(c => c !== scFlee);
+scFlee.pump = null;
+scFlee.station = null;
+scFlee.pose = null;
+scFlee.state = 'drive';
+scFlee.lane = 'inner';
+scFlee.s = modS(slotFlee.s + 90, L);
+scFlee.prevS = scFlee.s;
+step(5);
+assert(gbrPull.gbrPhase === GbrPhase.CHASE, 'GBR resumes chase when target fled during pullIn');
+assert(gbrPull.state === 'drive', 'GBR not stuck in pullIn');
+assert(gbrPull.gbrPhase !== GbrPhase.ENTER_SERVICE_LANE, 'GBR not stuck in SERVICE');
+
+// v0.3.7.1 — преследование до DESPAWN, не терять цель в EXITING
+const { gbrPursuitTarget } = await import('./js/systems/gbrPursuit.js');
+const { updateGBR } = await import('./js/systems/specialVehicles.js');
+FD.newGame('campaign', 1);
+const scPursuit = FD.makeScalper();
+scPursuit.scalperId = 101;
+scPursuit.wanted = true;
+scPursuit.crimeStarted = true;
+scPursuit.lane = 'inner';
+scPursuit.state = 'drive';
+scPursuit.s = modS(200, L);
+scPursuit.prevS = scPursuit.s;
+const gbrExit = makeGBR(5);
+initGbrOnSpawn(gbrExit);
+Game.vehicles = [scPursuit, gbrExit];
+assignGbrTarget(gbrExit, scPursuit);
+assert(gbrExit.gbrPhase === GbrPhase.CHASE, 'CHASE after assign');
+handoffScalperToRoad(scPursuit);
+assert(scPursuit.scalperPhase === ScalperPhase.EXITING, 'scalper EXITING');
+assert(scPursuit.pursuedBy === gbrExit.fleetId, 'pursuedBy kept in EXITING');
+assert(gbrPursuitTarget(gbrExit) === scPursuit, 'pursuit target active in EXITING');
+const logBeforeExit = (Game.pursuitEventLog || []).length;
+const removeExit = new Set();
+updateGBR(gbrExit, 1 / 30, L, removeExit);
+assert(gbrExit.gbrPhase === GbrPhase.CHASE, 'GBR stays CHASE during EXITING');
+const lostDuringExit = (Game.pursuitEventLog || []).slice(logBeforeExit)
+  .some(e => e.msg && e.msg.includes('Target lost'));
+assert(!lostDuringExit, 'no Target lost during EXITING');
+despawnScalper(scPursuit, removeExit);
+assert((Game.pursuitEventLog || []).some(e => e.msg && e.msg.includes('Target lost')),
+  'Target lost logged on DESPAWN');
+assert(gbrExit.targetScalperId == null, 'GBR link cleared after despawn');
+
+// v0.4.0.4 — назначение ГБР на уже разыскиваемого перекупа при спавне
+FD.newGame('campaign', 1);
+Game.money = 999999;
+const scWantedExit = FD.makeScalper();
+scWantedExit.scalperId = 201;
+scWantedExit.wanted = true;
+scWantedExit.crimeStarted = true;
+scWantedExit.wantedAt = 1;
+scWantedExit.lane = 'outer';
+scWantedExit.state = 'drive';
+scWantedExit.s = 400;
+scWantedExit.prevS = 400;
+scWantedExit.v = 55;
+setScalperPhase(scWantedExit, ScalperPhase.EXITING);
+scWantedExit.scalperLeavingMap = true;
+scWantedExit.scalperOwner = 'road';
+Game.vehicles = [scWantedExit];
+Game.scalper.unit = scWantedExit;
+readyGbr();
+FD.callGBR();
+const gbrLateCall = Game.gbr.unit;
+assert(gbrLateCall, 'GBR spawned after wanted EXITING scalper');
+assert(gbrLateCall.gbrPhase === GbrPhase.CHASE, 'spawn GBR CHASE for existing wanted');
+assert(gbrLateCall.targetScalperId === 201, 'spawn GBR assigned EXITING wanted');
+assert((Game.pursuitEventLog || []).some(e => e.msg.includes('Spawned')), 'Spawned logged');
+assert((Game.pursuitEventLog || []).some(e => e.msg.includes('Target assigned')), 'Target assigned on spawn');
+
+FD.newGame('campaign', 1);
+Game.money = 999999;
+const scWantedRing = FD.makeScalper();
+scWantedRing.scalperId = 202;
+scWantedRing.wanted = true;
+scWantedRing.crimeStarted = true;
+scWantedRing.wantedAt = 2;
+scWantedRing.lane = 'inner';
+scWantedRing.state = 'drive';
+scWantedRing.s = 900;
+scWantedRing.prevS = 900;
+scWantedRing.v = 40;
+scWantedRing.totalGot = 100;
+setScalperPhase(scWantedRing, ScalperPhase.DRIVING);
+Game.vehicles = [scWantedRing];
+readyGbr();
+FD.callGBR();
+const gbrRingWanted = Game.gbr.unit;
+assert(gbrRingWanted.gbrPhase === GbrPhase.CHASE, 'CHASE for wanted on ring without new AZS');
+assert(gbrRingWanted.targetScalperId === 202, 'assigned ring wanted scalper');
+
+FD.newGame('campaign', 1);
+Game.money = 999999;
+const scDup = FD.makeScalper();
+scDup.scalperId = 203;
+scDup.wanted = true;
+scDup.crimeStarted = true;
+scDup.lane = 'inner';
+scDup.state = 'drive';
+scDup.s = 300;
+scDup.prevS = 300;
+setScalperPhase(scDup, ScalperPhase.DRIVING);
+const gbrFirst = makeGBR(1);
+initGbrOnSpawn(gbrFirst);
+gbrFirst.lane = 'inner';
+gbrFirst.state = 'drive';
+gbrFirst.s = 100;
+gbrFirst.prevS = 100;
+Game.vehicles = [scDup, gbrFirst];
+assignGbrTarget(gbrFirst, scDup);
+assert(scDup.pursuedBy === gbrFirst.fleetId, 'first GBR owns target');
+readyGbr();
+spawnGbrUnit(gbrCallCost(), null, null);
+const gbrSecond = Game.vehicles.find(v => v.kind === 'gbr' && v !== gbrFirst);
+assert(gbrSecond, 'second GBR spawned');
+assert(gbrSecond.gbrPhase === GbrPhase.PATROL, 'second GBR stays PATROL');
+assert(gbrSecond.targetScalperId == null, 'second GBR does not steal target');
+assert(gbrFirst.targetScalperId === 203, 'first GBR keeps target');
+
+FD.newGame('campaign', 1);
+Game.money = 999999;
+Game.pursuitEventLog = [];
+readyGbr();
+FD.callGBR();
+const gbrEmpty = Game.gbr.unit;
+assert(gbrEmpty.gbrPhase === GbrPhase.PATROL, 'PATROL when no wanted');
+assert(gbrEmpty.targetScalperId == null, 'no target when no wanted');
+assert((Game.pursuitEventLog || []).some(e => e.msg.includes('PATROL')), 'PATROL logged on spawn');
 
 // Restart after defeat — Boot.restart() must not throw (Game is module-scoped)
 const { Boot } = await import('./js/boot.js');

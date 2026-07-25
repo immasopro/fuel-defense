@@ -53,8 +53,22 @@ export const balance = {
   },
   canister: { prob: 0.30, red: 10, green: 20 },
 
-  /** Себестоимость закупки топлива, ₽/л */
+  /** Себестоимость закупки топлива, ₽/л (базовая; гибкий заказ — см. fuelOrder) */
   fuelCostPerLiter: 70,
+
+  /** Гибкий заказ бензовоза (v0.4.1) */
+  fuelOrder: {
+    percents: [20, 30, 40, 50, 60, 70, 80, 90, 100],
+    pricePerLiter: {
+      20: 105, 30: 100, 40: 95, 50: 90, 60: 85, 70: 80, 80: 75, 90: 70, 100: 70
+    },
+    cashbackPct: {
+      20: 10, 30: 10, 40: 10, 50: 15, 60: 15, 70: 15, 80: 15, 90: 20, 100: 20
+    },
+    /** Макс. доля стоимости улучшения, оплачиваемая бонусами */
+    bonusShareStation: 0.30,
+    bonusShareDepot: 0.20
+  },
 
   depot: {
     levels: [1500, 2500, 4000, 6000, 9000, 13000, 18000, 25000, 35000, 50000],
@@ -126,7 +140,16 @@ export const balance = {
     len: 22,
     visionRadius: 500,
     patrolMaxLaps: 5,
-    chaseFollowDist: 14
+    chaseFollowDist: 14,
+    arrestDist: 22,
+    /** Приоритетное движение только в CHASE */
+    chaseDrive: {
+      gapMin: 1.5,
+      overtakeTrigger: 90,
+      overtakeDur: 1.35,
+      outerAheadPad: 4,
+      outerBehindPad: 8
+    }
   },
 
   gbrBase: {
@@ -146,7 +169,13 @@ export const balance = {
     evolutionStep: 500,
     evolutionBonus: 50,
     fillRate: 25,
-    retryChance: 0.2
+    retryChance: 0.2,
+    /** Выход с карты (EXITING) — независимо от updateLane */
+    exitSpeed: 55,
+    exitArriveDist: 12,
+    exitMaxTime: 35,
+    exitStallMax: 1.0,
+    exitMinStep: 3
   },
 
   follow: {

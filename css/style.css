@@ -48,6 +48,7 @@ html,body{height:100%;width:100%;overflow:hidden;position:fixed;background:#161b
 .act-btn:active{transform:scale(.96);filter:brightness(1.25)}
 .act-btn:disabled{background:#333a45;color:#8b949e;transform:none;filter:none}
 #btn-gbr{background:#c62828}
+#btn-tanker.tanker-ready{background:#c62828}
 #btn-light{background:#2e7d32}
 #btn-light.red-mode{background:#c62828}
 #btn-fs{position:absolute;top:calc(8px + env(safe-area-inset-top));right:8px;z-index:4;
@@ -194,3 +195,26 @@ html,body{height:100%;width:100%;overflow:hidden;position:fixed;background:#161b
 .menu-restart-actions{display:flex;flex-direction:column;gap:8px}
 .menu-main-buttons{display:flex;flex-direction:column;gap:10px}
 .menu-menu-buttons-hidden{display:none!important}
+
+/* ---- заказ бензовоза (не пауза) ---- */
+.tanker-order-dim{position:absolute;inset:0;z-index:7;background:rgba(8,10,14,.42);pointer-events:auto}
+.tanker-order{position:absolute;left:10px;right:10px;bottom:10px;z-index:8;
+  background:rgba(24,30,39,.97);border:1px solid #39404b;border-radius:16px;padding:14px 14px 12px;
+  box-shadow:0 -6px 28px #000c;max-height:70%;overflow-y:auto}
+.tanker-order.hidden,.tanker-order-dim.hidden{display:none}
+.tanker-order-x{position:absolute;top:8px;right:10px;width:36px;height:36px;border:none;border-radius:10px;
+  background:#2a313c;color:#e6edf3;font-size:16px;font-weight:800;cursor:pointer}
+.tanker-order-title{font-size:16px;font-weight:800;text-align:center;margin-bottom:6px}
+.tanker-order-pct{font-size:22px;font-weight:800;text-align:center;color:#81d4fa;margin-bottom:8px}
+.tanker-order-slider{width:100%;accent-color:#c62828;margin:4px 0 12px}
+.tanker-order-info{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-bottom:10px}
+.tanker-order-info div{background:#1c222b;border-radius:10px;padding:8px 10px;display:flex;
+  flex-direction:column;gap:2px}
+.tanker-order-info span{font-size:11px;color:#8b949e;font-weight:600}
+.tanker-order-info b{font-size:14px;font-weight:800}
+.tanker-order-error{background:#c62828;border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;
+  text-align:center;margin-bottom:8px}
+.tanker-order-error.hidden{display:none}
+.tanker-order-confirm{width:100%;min-height:48px;border:none;border-radius:12px;font:inherit;font-size:16px;
+  font-weight:800;color:#fff;background:#c62828;cursor:pointer;touch-action:manipulation}
+.tanker-order-confirm:active{transform:scale(.98);filter:brightness(1.15)}

@@ -7,13 +7,16 @@ import { handleTap, handlePanelAction, openGbrBasePanel } from './ui/stationPane
 import { closePanel } from './ui/stationPanel.js';
 import { newGame, restartCurrentLevel } from './game.js';
 import { CONFIG } from './config/index.js';
-import { callTanker, callGBR } from './systems/spawnSystem.js';
+import { callGBR } from './systems/spawnSystem.js';
 import { toggleTrafficLight } from './systems/trafficSystem.js';
 import { toggleDebugOverlay } from './debug/debugOverlay.js';
 import { initManualUi } from './ui/manual.js';
 import { initGameMenuUi } from './ui/gameMenu.js';
+import { initTankerOrderUi, openTankerOrderMenu } from './ui/tankerOrderMenu.js';
 import { checkForUpdate, isNewerVersion } from './systems/versionCheck.js';
 import { showVersionNotification } from './ui/versionNotification.js';
+import { isEndlessUnlocked } from './systems/campaignSave.js';
+import { CAMPAIGN_LEVEL_COUNT } from './config/levels.js';
 let eventsBound = false;
 
 function destroy() {
@@ -30,7 +33,7 @@ function bindEvents() {
     const b = e.target.closest ? e.target.closest('[data-act]') : null;
     if (b && !b.disabled) handlePanelAction(b.dataset);
   });
-  bindTap(UI.btnTanker, () => callTanker());
+  bindTap(UI.btnTanker, () => openTankerOrderMenu());
   bindLongTap(UI.btnGbr, () => callGBR(), () => openGbrBasePanel());
   bindTap(UI.btnLight, () => toggleTrafficLight());
   bindTap(UI.levelRow, e => {
@@ -42,18 +45,17 @@ function bindEvents() {
     }
   });
   bindTap(document.getElementById('btn-endless'), () => {
+    if (!isEndlessUnlocked()) return;
     markVersionSeen();
     UI.screenStart.classList.add('hidden');
-    Boot.startLevel('endless', 11);
+    Boot.startLevel('endless');
   });
   bindTap(document.getElementById('btn-restart'), () => Boot.restart());
   bindTap(UI.btnNext, () => {
     UI.screenEnd.classList.add('hidden');
-    if (Game.mode === 'campaign' && Game.levelIdx >= CONFIG.levels.length) {
-      Boot.startLevel('endless', 11);
-    } else if (Game.mode === 'endless') {
-      Boot.startLevel('endless', Game.levelIdx + 1);
-    } else {
+    if (Game.mode === 'campaign' && Game.levelIdx === CAMPAIGN_LEVEL_COUNT) {
+      if (isEndlessUnlocked()) Boot.startLevel('endless');
+    } else if (Game.mode === 'campaign') {
       Boot.startLevel('campaign', Game.levelIdx + 1);
     }
   });
@@ -73,6 +75,7 @@ function bindEvents() {
   });
   initManualUi(bindTap);
   initGameMenuUi(bindTap);
+  initTankerOrderUi();
 }
 
 function initDom() {

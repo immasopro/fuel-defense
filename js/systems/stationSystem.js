@@ -9,9 +9,8 @@ import { refillCanisterReserve } from '../stations/reservoir.js';
 import { cleanupVehicle, scanForStation, tryApproachPocket, tryApproachPullIn,
   beginLaneChange, beginPullOut, processStationPocket } from '../stations/stationQueue.js';
 import { StationApi } from './stationApi.js';
-import { ScalperPhase, GbrPhase, setScalperPhase } from './entityFsm.js';
-import { ScalperOwner, completeStationExit, getScalperOwner } from './scalperLifecycle.js';
-import { onScalperExitReached } from './gbrPursuit.js';
+import { ScalperPhase, GbrPhase } from './entityFsm.js';
+import { ScalperOwner, completeStationExit, getScalperOwner, isScalperLeavingMap, updateScalpersLeavingMap } from './scalperLifecycle.js';
 import {
   updateScalperTour, updateScalperAtColumn, updateScalperWaiting,
   updateGBR, tickSpecialSpawns, onGbrReturnPullOutComplete
@@ -22,8 +21,9 @@ import {
 } from './tankerSystem.js';
 
 export function updateVehicles(dt, L) {
-  const outer = outerLaneList();
   const removeSet = new Set();
+  updateScalpersLeavingMap(dt, L, removeSet);
+  const outer = outerLaneList();
   for (const v of Game.vehicles) {
     if (removeSet.has(v)) continue;
     if (v.kind === 'gbr') updateGBR(v, dt, L, removeSet);
@@ -45,10 +45,8 @@ export function updateVehicles(dt, L) {
               if (laneGapFree(outer, mod(v.s + 14, L), v.len)) beginLaneChange(v);
             }
           }
-        } else if (v.kind === 'scalper') {
-          if (getScalperOwner(v) === ScalperOwner.ROAD) {
-            // дорожная система владеет движением до EXIT
-          } else if (v.pocketSlot && !v.pump) tryApproachPocket(v, L);
+        } else if (v.kind === 'scalper' && !isScalperLeavingMap(v)) {
+          if (v.pocketSlot && !v.pump) tryApproachPocket(v, L);
           else if (v.pump) {
             const ctx = StationApi.getColumnContext(v);
             if (ctx && ctx.rank > 0) v.stopS = approachStopS(v.targetSlot);
@@ -58,13 +56,7 @@ export function updateVehicles(dt, L) {
           updateTankerDrive(v, dt, L, removeSet);
         }
       } else if (crossed(v, Road.spawnS)) {
-        if (v.kind === 'scalper' && getScalperOwner(v) === ScalperOwner.ROAD &&
-            v.scalperPhase === ScalperPhase.EXITING) {
-          setScalperPhase(v, ScalperPhase.DESPAWN);
-          onScalperExitReached(v);
-          removeSet.add(v);
-          if (Game.scalper.unit === v) Game.scalper.unit = null;
-        } else if (v.trip > 30) {
+        if (v.trip > 30) {
           if (v.kind === 'car' && v.served) Game.stats.served++;
           if (v.kind === 'tanker') tryRemoveExitingTanker(v, removeSet);
           else if (v.kind !== 'gbr') removeSet.add(v);

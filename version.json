@@ -1,7 +1,7 @@
 {
-  "version": "0.3.5.2",
+  "version": "0.4.1",
   "notes": [
-    "Инварианты ROAD handoff с логированием нарушений",
-    "DBG перекупа: PHASE STATE LANE OWNER MOVE V dS"
+    "Flexible tanker fuel order + bonus cashback",
+    "Start money 50000"
   ]
 }

@@ -27,6 +27,45 @@ ES module live bindings resolve these at call time (no top-level circular init).
 5. **`holderBusy`** — module-level flag kept in `trafficSystem.js` per assignment.
 6. **Headless test** — uses `globalThis.__FD_HEADLESS__` to skip `boot()`; DOM is mocked minimally (no full canvas semantics).
 
+## Patch 0.4.1 — Flexible fuel order + bonus account
+
+- **Order menu** — tanker button opens non-pausing order UI; slider 20–100% (10% steps).
+- **Pricing** — fixed ₽/L and cashback % per load tier; bonuses = cost × cashback.
+- **Bonuses** — spend on station upgrades (≤30%) and depot capacity (≤20%); not on tanker/fleet/GBR/fuel.
+- **Start money** — 50 000 ₽ for new campaign/endless runs.
+- **Order payment** — menu requires cash ≥ cost (no credit on confirmed orders).
+
+## Patch 0.4.0.4 — Assign wanted scalper on GBR spawn
+
+- **EXITING wanted** — assignable (no longer excluded from `findUnpursuedWantedScalpers`).
+- **Spawn** — `assignSpawnGbrTarget`: nearest unpursued wanted → CHASE; else PATROL; logs Spawned / Target / PATROL.
+- **Tie-break** — nearest to new GBR, then earliest `wantedAt`.
+
+## Patch 0.4.0.3 — Stolen fuel only after successful escape
+
+- **Deferred theft** — `finishScalperFuel` only fills `totalGot`; no `stolenLiters` / evolution during refill.
+- **Commit on despawn** — `commitScalperEscapeTheft` in `despawnScalper` if not forfeited.
+- **Arrest forfeit** — `forfeitScalperTheft` in `finishArrest`; paid fuel does not strengthen future scalpers.
+
+## Patch 0.4.0.2 — Priority GBR chase driving
+
+- **CHASE only** — `isChasePriorityGbr`: aggressive overtake, reduced `gapMin`, shorter overtake, early lane return.
+- **Civilians** — do not block chase; forced overtake when slow traffic ahead; never overtake assigned scalper target.
+- **Other phases** — PATROL / RETURNING / ARREST keep normal follow model.
+
+## Patch 0.4.0.1 — Road arrest chase close-in
+
+- **Road chase** — `applyRoadChasePursuit`: same lane as target, `stopS = target.s`, speed ≥ exitSpeed+10 so GBR reaches `arrestDist`.
+- **Post-arrest exit** — road arrest finishes with direct EXITING handoff (no broken `stationExitActive` path).
+
+## Patch 0.4.0 — Campaign Rework
+
+- **Campaign** — 20 levels; `targetCars` table in `levels.js`; win when `served >= target` (scalpers excluded).
+- **Spawn ramp** — start 0.25/s (4s interval); tiered max by level; last 20% of level at max (`SPAWN_RAMP_FRAC = 0.8`).
+- **Endless** — separate mode (`Game.levelIdx = 0`); no target; linear spawn ramp to 3/s at 10k served.
+- **Saves** — `campaignSave.js`: `fd_unlocked`, `fd_endless_unlocked`, `fd_endless_best`, `fd_campaign_complete`.
+- **HUD** — `getServedHudText()`: campaign `N / target`, endless `N обслужено`.
+
 ## Patch 0.2.11 — Fuel credit & new defeat conditions
 
 - **Tanker credit** — balance may go negative up to `−tankerDeliveryCost()`; `canOrderTanker()` gate.
@@ -41,7 +80,7 @@ ES module live bindings resolve these at call time (no top-level circular init).
 
 ## Patch 0.2.10.1 — Scalper theft economy fix
 
-- **Scalper** — theft records `stolenLiters` / `stolenDamage` only; no money, earned, or commercial liters.
+- **Scalper** — fuel in `totalGot` during theft; `stolenLiters` / `stolenDamage` / evolution only after successful escape despawn (not after GBR arrest).
 - **GBR arrest** — no balance clawback (theft was never paid).
 
 ## Patch 0.2.10 — Fuel cost & tanker procurement

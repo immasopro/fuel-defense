@@ -2,16 +2,26 @@ import { CONFIG } from '../config/index.js';
 import { Game } from '../core/gameState.js';
 import { fmtTime } from '../core/utils.js';
 import { fmtRub } from '../core/currency.js';
-import { getTargetCars } from './spawnSystem.js';
-import { canOrderTanker } from './economySystem.js';
+import { getTargetCars, hasLevelTarget } from './spawnSystem.js';
+import { quoteFuelOrder } from './fuelOrderSystem.js';
 import { hasActiveTankerDelivery, hasReadyTanker } from './tankerLogistics.js';
 import { sortedStationSlots } from '../world/map.js';
 import { innerLaneList, spawnClear, isLightGreen } from './trafficSystem.js';
 import { closePanel } from '../ui/stationPanel.js';
-import { UI, getUnlocked, setUnlocked } from '../ui/hud.js';
+import { UI } from '../ui/hud.js';
+import {
+  getUnlocked, setUnlocked, setCampaignComplete,
+  tryUpdateEndlessBest, getEndlessBest
+} from './campaignSave.js';
+import { CAMPAIGN_LEVEL_COUNT } from '../config/levels.js';
 
 function hasWaitingClients() {
-  if (Game.stats.served < getTargetCars()) return true;
+  if (hasLevelTarget()) {
+    const target = getTargetCars();
+    if (target != null && Game.stats.served < target) return true;
+  } else {
+    return true;
+  }
   for (const v of Game.holder) {
     if (v.kind === 'car' && !v.served) return true;
   }
@@ -35,11 +45,14 @@ function isFuelExhausted() {
 function isTankerCreditBlocked() {
   if (hasActiveTankerDelivery()) return false;
   if (!sortedStationSlots().length) return true;
-  if (hasReadyTanker()) return !canOrderTanker();
+  const minQuote = quoteFuelOrder(20);
+  // v0.4.1: заказ через меню требует деньги ≥ стоимости (без кредита)
+  const cannotPay = Game.money < minQuote.cost;
+  if (hasReadyTanker()) return cannotPay;
   const hasQueued = Game.logistics?.trucks.some(t =>
     t.state === 'PREPARING' || t.state === 'WAIT_PREPARING');
-  if (hasQueued) return !canOrderTanker();
-  return !canOrderTanker();
+  if (hasQueued) return cannotPay;
+  return cannotPay;
 }
 
 function checkFuelCrisis() {
@@ -62,14 +75,23 @@ function updateDefeatTimer(dt) {
   return false;
 }
 
+function formatServedLine() {
+  if (Game.mode === 'endless') {
+    return '⛽ Обслужено машин: <b>' + Game.stats.served + '</b>';
+  }
+  const target = getTargetCars();
+  return '⛽ Обслужено машин: <b>' + Game.stats.served + ' / ' + target + '</b>';
+}
+
 function endGame(win, reason) {
   const defeatReason = reason || (win ? 'win' : 'traffic');
   Game.state = win ? 'win' : 'over';
   Game.defeatReason = defeatReason;
   closePanel();
   UI.warning.classList.add('hidden');
-  const endless = Game.mode === 'endless';
   const target = getTargetCars();
+  const campaignFinal = win && Game.mode === 'campaign' && Game.levelIdx === CAMPAIGN_LEVEL_COUNT;
+  let endlessNewRecord = false;
 
   if (defeatReason === 'bankruptcy') {
     UI.endTitle.textContent = '💥 ИГРА ОКОНЧЕНА';
@@ -82,40 +104,55 @@ function endGame(win, reason) {
     UI.endDesc.textContent = 'Вы не смогли заправить все автомобили.';
     if (UI.btnRestart) UI.btnRestart.textContent = 'Начать заново';
     if (UI.btnMenu) UI.btnMenu.textContent = 'Главное меню';
+  } else if (Game.mode === 'endless' && !win) {
+    endlessNewRecord = tryUpdateEndlessBest(Game.stats.served);
+    UI.endTitle.textContent = '💥 ИГРА ОКОНЧЕНА';
+    UI.endTitle.style.color = '#ef5350';
+    UI.endDesc.textContent = 'Накопитель переполнен — пробка не рассеялась за ' + CONFIG.defeatTime +
+      ' с. Обслужено ' + Game.stats.served + ' машин.' +
+      (endlessNewRecord ? ' 🏆 Новый рекорд!' : '');
+    if (UI.btnRestart) UI.btnRestart.textContent = 'ЕЩЁ РАЗ';
+    if (UI.btnMenu) UI.btnMenu.textContent = 'В МЕНЮ';
+  } else if (campaignFinal) {
+    setCampaignComplete(true);
+    UI.endTitle.textContent = '🏆 КАМПАНИЯ ПРОЙДЕНА!';
+    UI.endTitle.style.color = '#8bc34a';
+    UI.endDesc.textContent =
+      'Поздравляем! Вы прошли все ' + CAMPAIGN_LEVEL_COUNT + ' уровней кампании. ' +
+      'Разблокирован бесконечный режим — проверьте, сколько машин сможете обслужить!';
+    if (UI.btnRestart) UI.btnRestart.textContent = 'ЕЩЁ РАЗ';
+    if (UI.btnMenu) UI.btnMenu.textContent = 'В МЕНЮ';
   } else {
     if (UI.btnRestart) UI.btnRestart.textContent = 'ЕЩЁ РАЗ';
     if (UI.btnMenu) UI.btnMenu.textContent = 'В МЕНЮ';
     UI.endTitle.textContent = win ? '🏆 ПОБЕДА!' : '💥 ИГРА ОКОНЧЕНА';
     UI.endTitle.style.color = win ? '#8bc34a' : '#ef5350';
     UI.endDesc.textContent = win
-      ? (endless
-        ? 'Уровень ' + Game.levelIdx + ' пройден — обслужено ' + target + ' машин!'
-        : 'Уровень ' + Game.levelIdx + ' пройден — обслужено ' + target + ' машин!')
-      : (endless
-        ? 'Накопитель переполнен — пробка не рассеялась за ' + CONFIG.defeatTime + 'с. Обслужено ' +
-          Game.stats.served + ' / ' + target + '.'
-        : 'Накопитель переполнен, и въезд остался заблокирован ' + CONFIG.defeatTime +
-          ' секунд.');
+      ? ('Уровень ' + Game.levelIdx + ' пройден — обслужено ' + target + ' машин!')
+      : ('Накопитель переполнен, и въезд остался заблокирован ' + CONFIG.defeatTime +
+        ' секунд.');
   }
 
-  UI.endStats.innerHTML =
-    '⏱ Время: <b>' + fmtTime(Game.time) + '</b><br>' +
-    '⛽ Обслужено машин: <b>' + Game.stats.served + ' / ' + target + '</b><br>' +
+  let statsHtml = '⏱ Время: <b>' + fmtTime(Game.time) + '</b><br>' + formatServedLine() + '<br>' +
     '🛢 Отпущено топлива: <b>' + Math.round(Game.stats.liters) + ' л</b><br>' +
     '🚨 Украдено: <b>' + Math.round(Game.stats.stolenLiters) + ' л</b><br>' +
     '💰 Заработано: <b>' + fmtRub(Game.stats.earned) + '</b><br>' +
     '💳 Баланс: <b>' + fmtRub(Game.money) + '</b>';
 
+  if (Game.mode === 'endless' && !win) {
+    statsHtml += '<br>🏆 Лучший результат: <b>' + getEndlessBest() + '</b>';
+    if (endlessNewRecord) statsHtml += '<br><b>Новый рекорд!</b>';
+  }
+
+  UI.endStats.innerHTML = statsHtml;
+
   if (win && defeatReason !== 'bankruptcy') {
-    if (Game.mode === 'campaign' && Game.levelIdx < CONFIG.levels.length) {
+    if (Game.mode === 'campaign' && Game.levelIdx < CAMPAIGN_LEVEL_COUNT) {
       setUnlocked(Math.max(getUnlocked(), Game.levelIdx + 1));
       UI.btnNext.textContent = 'Уровень ' + (Game.levelIdx + 1);
       UI.btnNext.classList.remove('hidden');
-    } else if (Game.mode === 'campaign' && Game.levelIdx === CONFIG.levels.length) {
+    } else if (campaignFinal) {
       UI.btnNext.textContent = '∞ Бесконечный режим';
-      UI.btnNext.classList.remove('hidden');
-    } else if (Game.mode === 'endless') {
-      UI.btnNext.textContent = 'Уровень ' + (Game.levelIdx + 1);
       UI.btnNext.classList.remove('hidden');
     } else {
       UI.btnNext.classList.add('hidden');

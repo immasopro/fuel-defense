@@ -1,12 +1,12 @@
 /** Единый источник версии и списка изменений текущего патча */
 
 export const GameVersion = {
-  version: '0.3.5.2',
-  buildStamp: '2026-07-17T21:45:00Z',
+  version: '0.4.1',
+  buildStamp: '2026-07-25T23:20:00Z',
   changes: [
-    'Проверка инвариантов при передаче перекупа на ROAD',
-    'DBG: PHASE, STATE, LANE, OWNER, MOVE, V, ΔS',
-    'Лог нарушений handoff в консоль и pursuit log'
+    'Гибкая закупка топлива: меню объёма, цена и кэшбэк',
+    'Бонусный счёт для улучшений АЗС и нефтебазы',
+    'Стартовый капитал 50 000 ₽'
   ],
   architectureDoc: 'ARCHITECTURE_NOTES.md'
 };

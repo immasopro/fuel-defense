@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#10141a">
-<title>Fuel Defense v0.3.5.2</title>
+<title>Fuel Defense v0.4.1</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -19,6 +19,28 @@
     <button id="btn-debug" type="button">DBG</button>
     <div id="warning" class="hidden"></div>
     <div id="panel" class="hidden"></div>
+    <div id="tanker-order-dim" class="tanker-order-dim hidden"></div>
+    <div id="tanker-order" class="tanker-order hidden" role="dialog" aria-label="Заказ бензовоза">
+      <button type="button" class="tanker-order-x" id="tanker-order-close" aria-label="Закрыть">✕</button>
+      <div class="tanker-order-title">Заказ топлива</div>
+      <div class="tanker-order-pct" id="tanker-order-pct">100%</div>
+      <input type="range" id="tanker-order-slider" class="tanker-order-slider"
+        min="20" max="100" step="10" value="100" list="tanker-order-ticks">
+      <datalist id="tanker-order-ticks">
+        <option value="20"></option><option value="30"></option><option value="40"></option>
+        <option value="50"></option><option value="60"></option><option value="70"></option>
+        <option value="80"></option><option value="90"></option><option value="100"></option>
+      </datalist>
+      <div class="tanker-order-info">
+        <div><span>Объём</span><b id="tanker-order-liters">—</b></div>
+        <div><span>Цена</span><b id="tanker-order-price">—</b></div>
+        <div><span>Стоимость</span><b id="tanker-order-cost">—</b></div>
+        <div><span>Кэшбэк</span><b id="tanker-order-cashback">—</b></div>
+        <div><span>Бонусы</span><b id="tanker-order-bonuses">—</b></div>
+      </div>
+      <div id="tanker-order-error" class="tanker-order-error hidden"></div>
+      <button type="button" class="tanker-order-confirm" id="tanker-order-confirm">Вызвать бензовоз</button>
+    </div>
   </div>
   <div id="hud">
     <div id="stats">
@@ -84,8 +106,11 @@
   </p>
   <h2>КАМПАНИЯ</h2>
   <div id="level-row"></div>
-  <h2>или</h2>
-  <button class="big-btn alt" id="btn-endless">∞ БЕСКОНЕЧНЫЙ РЕЖИМ</button>
+  <div id="endless-section" class="hidden">
+    <h2>или</h2>
+    <button class="big-btn alt" id="btn-endless">∞ Бесконечный режим</button>
+    <p class="endless-record" id="endless-record"></p>
+  </div>
   <p class="build-footer" id="build-footer"></p>
 </div>
 

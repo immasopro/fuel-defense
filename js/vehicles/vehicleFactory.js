@@ -78,12 +78,13 @@ function makeScalper() {
   });
 }
 
-function makeTanker(fleetId) {
+function makeTanker(fleetId, loadLiters) {
   const C = CONFIG.tanker;
   const cap = tankerTruckCapacity();
+  const load = loadLiters != null ? Math.min(Math.max(0, loadLiters), cap) : cap;
   const t = baseVehicle('tanker', {
     len: C.len, w: 12, maxV: C.speed, accel: 28, brake: 70, v: C.speed * .4,
-    load: cap, capacity: cap, react: .25,
+    load, capacity: cap, react: .25,
     tour: tankerTour(), tourIdx: 0, depotLeg: 0,
     tankerPhase: TankerPhase.SPAWNING,
     fleetId: fleetId || null

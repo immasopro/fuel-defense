@@ -1,7 +1,7 @@
 export const Game = {
   state: 'menu',
   mode: 'campaign', levelIdx: 1, modeCfg: null,
-  money: 0, time: 0,
+  money: 0, bonuses: 0, time: 0,
   depot: { level: 1, res: 1500, cap: 1500 },
   tankerTruck: { level: 1 },
   fleet: { level: 1 },

@@ -1,6 +1,6 @@
 /**
- * Единый владелец и процедура выезда перекупа с АЗС (v0.3.5).
- * special → station (территория АЗС) → road (до EXIT).
+ * Единый владелец и процедура выезда перекупа с АЗС.
+ * special → station (территория АЗС) → EXITING (выход с карты) → DESPAWN.
  */
 
 import { CONFIG } from '../config/index.js';
@@ -9,11 +9,24 @@ import { Road } from '../world/roadNetwork.js';
 import { mod } from '../core/utils.js';
 import { ScalperPhase, setScalperPhase } from './entityFsm.js';
 import { StationApi } from './stationApi.js';
-import { logPursuitEvent } from './gbrPursuit.js';
+import { logPursuitEvent, clearScalperWanted } from './gbrPursuit.js';
 import { outerLaneList } from './trafficSystem.js';
+import { commitScalperEscapeTheft } from './economySystem.js';
+
+export const ScalperOwner = {
+  SPECIAL: 'special',
+  STATION: 'station',
+  ROAD: 'road'
+};
+
+const MAX_OWNER_LOG = 40;
+
+export function isScalperLeavingMap(sc) {
+  return sc?.kind === 'scalper' && sc.scalperPhase === ScalperPhase.EXITING;
+}
 
 export function isVehicleInUpdateLane(v) {
-  if (!v) return false;
+  if (!v || isScalperLeavingMap(v)) return false;
   if (v.lane === 'outer') return v.state === 'drive';
   if (v.lane === 'inner') return v.state === 'drive' || v.state === 'action' || v.state === 'tow';
   return false;
@@ -32,29 +45,106 @@ function scalperInAnyStationList(sc) {
   return false;
 }
 
-/** Проверка инвариантов после передачи перекупа дорожной системе. */
+function distAheadOnRing(from, to, L) {
+  return mod(to - from, L);
+}
+
+/** Миссия завершена — начало выхода с карты (этап 1→2). */
+function beginScalperLeavingMap(sc) {
+  if (!sc || sc.scalperLeavingMap) return;
+  sc.scalperLeavingMap = true;
+  sc.scalperExitT = 0;
+  sc.scalperExitStallT = 0;
+  sc.stopS = null;
+  sc.state = 'drive';
+  sc.lane = 'outer';
+  sc.pose = null;
+  sc.tour = [];
+  sc.tourIdx = 0;
+  sc.pump = null;
+  sc.station = null;
+  sc.pocketSlot = null;
+  sc.targetSlot = null;
+  setScalperPhase(sc, ScalperPhase.EXITING);
+  logPursuitEvent('[SCALPER] Leaving map');
+}
+
+/** Удаление объекта (этап 3). Wanted снимается только здесь. */
+export function despawnScalper(sc, removeSet) {
+  if (!sc) return;
+  logPursuitEvent('[SCALPER] Despawn complete');
+  commitScalperEscapeTheft(sc);
+  clearScalperWanted(sc);
+  setScalperPhase(sc, ScalperPhase.DESPAWN);
+  sc.scalperLeavingMap = false;
+  removeSet.add(sc);
+  if (Game.scalper.unit === sc) Game.scalper.unit = null;
+}
+
+/**
+ * Автономное движение EXITING-перекупов — вне updateLane.
+ * Гарантированный прогресс; не зависит от crossed(), лидеров, stopS.
+ */
+export function updateScalpersLeavingMap(dt, L, removeSet) {
+  const C = CONFIG.scalper;
+  const exitSpeed = C.exitSpeed;
+  const arrive = C.exitArriveDist;
+  const maxT = C.exitMaxTime;
+  const stallMax = C.exitStallMax;
+  const minStep = C.exitMinStep;
+
+  for (const sc of Game.vehicles) {
+    if (!isScalperLeavingMap(sc)) continue;
+
+    sc.scalperExitT = (sc.scalperExitT || 0) + dt;
+
+    const distToExit = distAheadOnRing(sc.s, Road.spawnS, L);
+    if (distToExit < arrive || sc.scalperExitT >= maxT) {
+      despawnScalper(sc, removeSet);
+      continue;
+    }
+
+    const prevS = sc.s;
+    sc.prevS = prevS;
+    const step = Math.max(exitSpeed * dt, minStep * dt);
+    sc.s = mod(sc.s + step, L);
+    sc.v = exitSpeed;
+
+    const ds = mod(sc.s - prevS, L);
+    if (ds < 0.5 * dt) {
+      sc.scalperExitStallT = (sc.scalperExitStallT || 0) + dt;
+      if (sc.scalperExitStallT >= stallMax) {
+        const jump = Math.max(step * 2, distToExit * 0.35);
+        sc.s = mod(sc.s + jump, L);
+        sc.scalperExitStallT = 0;
+      }
+    } else {
+      sc.scalperExitStallT = 0;
+    }
+
+    if (distAheadOnRing(sc.s, Road.spawnS, L) < arrive) {
+      despawnScalper(sc, removeSet);
+    }
+  }
+}
+
+/** Проверка инвариантов после передачи в режим выхода с карты. */
 export function assertRoadHandoffInvariants(sc, context) {
   if (!sc) return false;
   const tag = context ? '[' + context + '] ' : '';
   const violations = [];
 
-  if (getScalperOwner(sc) !== ScalperOwner.ROAD) {
-    violations.push('owner !== ROAD (got ' + ownerDebugLabel(sc) + ')');
+  if (sc.scalperPhase !== ScalperPhase.EXITING) {
+    violations.push('phase !== EXITING (got ' + sc.scalperPhase + ')');
   }
-  if (sc.state !== 'drive') {
-    violations.push('state !== drive (got ' + sc.state + ')');
+  if (!sc.scalperLeavingMap) {
+    violations.push('scalperLeavingMap not set');
   }
-  if (sc.lane !== 'outer') {
-    violations.push('lane !== outer (got ' + sc.lane + ')');
+  if (sc.stopS != null) {
+    violations.push('stopS must be null during EXITING (got ' + sc.stopS + ')');
   }
-  if (sc.pose != null) {
-    violations.push('pose !== null');
-  }
-  if (sc.stopS !== Road.spawnS) {
-    violations.push('stopS !== Road.spawnS (got ' + sc.stopS + ', want ' + Road.spawnS + ')');
-  }
-  if (!outerLaneList().includes(sc)) {
-    violations.push('not in outerLaneList()');
+  if (outerLaneList().includes(sc)) {
+    violations.push('EXITING scalper must not be in outerLaneList');
   }
   if (scalperInAnyStationList(sc)) {
     violations.push('still referenced in station lists');
@@ -68,31 +158,26 @@ export function assertRoadHandoffInvariants(sc, context) {
   return violations.length === 0;
 }
 
-function finishRoadHandoff(sc, context) {
+function finishLeavingMapHandoff(sc, context) {
   assertRoadHandoffInvariants(sc, context);
 }
 
 export function scalperMovementDebug(sc) {
   const L = Road.length;
   const ds = mod((sc.s || 0) - (sc.prevS ?? sc.s ?? 0), L);
+  let move = 'OFF';
+  if (isScalperLeavingMap(sc)) move = 'EXIT';
+  else if (isVehicleInUpdateLane(sc)) move = 'ON';
   return {
     phase: String(sc.scalperPhase || ScalperPhase.DRIVING).toUpperCase(),
     state: sc.state || '?',
     lane: sc.lane || '?',
     owner: ownerDebugLabel(sc),
-    move: isVehicleInUpdateLane(sc) ? 'ON' : 'OFF',
+    move,
     v: Math.round(sc.v || 0),
     ds: Math.round(ds * 10) / 10
   };
 }
-
-export const ScalperOwner = {
-  SPECIAL: 'special',
-  STATION: 'station',
-  ROAD: 'road'
-};
-
-const MAX_OWNER_LOG = 40;
 
 export function resetScalperLifecycleState() {
   Game.scalperOwnerLog = [];
@@ -127,6 +212,9 @@ export function initScalperLifecycle(sc) {
   sc.scalperOwner = ScalperOwner.SPECIAL;
   sc.stationExitActive = false;
   sc.stationExitReason = null;
+  sc.scalperLeavingMap = false;
+  sc.scalperExitT = 0;
+  sc.scalperExitStallT = 0;
 }
 
 export function isStationExitActive(sc) {
@@ -141,7 +229,7 @@ function captureExitContext(sc, opts) {
   };
 }
 
-/** Единая точка входа: выезд с территории АЗС. Повторный вызов игнорируется. */
+/** Единая точка входа: выезд с территории АЗС. */
 export function beginStationExit(sc, reason, opts) {
   if (!sc || isStationExitActive(sc)) return false;
 
@@ -185,7 +273,7 @@ export function beginStationExit(sc, reason, opts) {
   return completeStationExit(sc);
 }
 
-/** Завершение выезда: полная очистка станции, передача дорожной системе. */
+/** Завершение выезда с АЗС → начало автономного выхода с карты. */
 export function completeStationExit(sc) {
   if (!sc) return false;
 
@@ -197,40 +285,34 @@ export function completeStationExit(sc) {
   sc.stopS = null;
   sc.stationExitActive = false;
 
-  setScalperPhase(sc, ScalperPhase.EXITING);
   transferScalperOwner(sc, ScalperOwner.ROAD, 'exit_complete');
 
-  sc.lane = 'outer';
-  sc.state = 'drive';
   if (sc.exitS != null) {
     sc.s = sc.exitS;
     sc.prevS = sc.s;
   }
-  sc.v = Math.max(sc.v || 0, CONFIG.scalper.speed * 0.55);
+  sc.v = Math.max(sc.v || 0, CONFIG.scalper.exitSpeed);
   sc.trip = 0;
-  sc.pose = null;
-  sc.stopS = Road.spawnS;
   sc.exitSlot = null;
   sc.exitPumpJ = 0;
-  finishRoadHandoff(sc, 'exit_complete');
+
+  beginScalperLeavingMap(sc);
+  finishLeavingMapHandoff(sc, 'exit_complete');
   return true;
 }
 
-/** Перекуп уже вне территории АЗС — сразу на дорогу к EXIT. */
+/** Перекуп вне АЗС — сразу в режим выхода с карты. */
 export function handoffScalperToRoad(sc) {
-  if (!sc || getScalperOwner(sc) === ScalperOwner.ROAD) return false;
+  if (!sc || isScalperLeavingMap(sc)) return false;
   if (isStationExitActive(sc)) return false;
 
   StationApi.cleanupVehicleStationLinks(sc);
   sc.stationExitActive = false;
-  setScalperPhase(sc, ScalperPhase.EXITING);
   transferScalperOwner(sc, ScalperOwner.ROAD, 'road_handoff');
-  sc.state = 'drive';
-  sc.lane = 'outer';
-  sc.pose = null;
-  sc.stopS = Road.spawnS;
-  sc.v = Math.max(sc.v || 0, CONFIG.scalper.speed * 0.55);
-  finishRoadHandoff(sc, 'road_handoff');
+  sc.v = Math.max(sc.v || 0, CONFIG.scalper.exitSpeed);
+
+  beginScalperLeavingMap(sc);
+  finishLeavingMapHandoff(sc, 'road_handoff');
   return true;
 }
 
