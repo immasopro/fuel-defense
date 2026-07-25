@@ -1,4 +1,4 @@
-/** Снапшот денег/бонусов активного раунда — v0.4.2.1 */
+/** Снапшот прогресса активного раунда — v0.4.2.3 (деньги, бонусы, spawned/served) */
 
 import { Game } from '../core/gameState.js';
 
@@ -11,15 +11,26 @@ function normalizeBonuses() {
   return Game.bonuses;
 }
 
+function normalizeSpawnStats() {
+  if (!Game.stats) Game.stats = { served: 0, spawned: 0, earned: 0, liters: 0, stolenLiters: 0, stolenDamage: 0 };
+  if (!Number.isFinite(Game.stats.spawned) || Game.stats.spawned < 0) Game.stats.spawned = 0;
+  if (!Number.isFinite(Game.stats.served) || Game.stats.served < 0) Game.stats.served = 0;
+  Game.stats.spawned = Math.round(Game.stats.spawned);
+  Game.stats.served = Math.round(Game.stats.served);
+}
+
 export function saveRunEconomy() {
   if (Game.state !== 'play') return;
   normalizeBonuses();
+  normalizeSpawnStats();
   try {
     localStorage.setItem(KEY, JSON.stringify({
       mode: Game.mode,
       levelIdx: Game.levelIdx,
       money: Game.money,
       bonuses: Game.bonuses,
+      spawned: Game.stats.spawned,
+      served: Game.stats.served,
       savedAt: Date.now()
     }));
   } catch (e) { /* ignore */ }
@@ -62,12 +73,19 @@ export function consumeResumePending() {
   }
 }
 
-/** Восстановить money/bonuses из снапшота того же mode/level. */
+/** Восстановить money/bonuses/spawned/served из снапшота того же mode/level. */
 export function tryRestoreRunEconomy() {
   const data = readRunEconomy();
   if (!data) return false;
   if (data.mode !== Game.mode || +data.levelIdx !== +Game.levelIdx) return false;
   Game.money = data.money;
   Game.bonuses = Math.max(0, Math.round(data.bonuses));
+  if (!Game.stats) Game.stats = { served: 0, spawned: 0, earned: 0, liters: 0, stolenLiters: 0, stolenDamage: 0 };
+  if (Number.isFinite(data.spawned) && data.spawned >= 0) {
+    Game.stats.spawned = Math.round(data.spawned);
+  }
+  if (Number.isFinite(data.served) && data.served >= 0) {
+    Game.stats.served = Math.round(data.served);
+  }
   return true;
 }

@@ -49,7 +49,7 @@ export function newGame(mode, levelIdx) {
   resetPursuitState();
   resetScalperLifecycleState();
   Game.scalper = { unit: null };
-  Game.stats = { served: 0, earned: 0, liters: 0, stolenLiters: 0, stolenDamage: 0 };
+  Game.stats = { served: 0, spawned: 0, earned: 0, liters: 0, stolenLiters: 0, stolenDamage: 0 };
   Game.tankLabels = {};
   Game.depotLabel = 0;
   Game.bgSpawnTimer = 0;

@@ -805,9 +805,9 @@ assert(despawnLog, 'Despawn complete logged');
 // version check
 const { compareVersions, isNewerVersion, GAME_VERSION, hasPendingUpdate, _setRemoteVersionForTest } =
   await import('./js/systems/versionCheck.js');
-assert(GAME_VERSION === '0.4.2.2', 'GAME_VERSION 0.4.2.2');
-assert(compareVersions('0.4.2.2', '0.4.2.1') > 0, 'semver newer');
-assert(!isNewerVersion('0.4.2.2'), 'same version not newer');
+assert(GAME_VERSION === '0.4.2.3', 'GAME_VERSION 0.4.2.3');
+assert(compareVersions('0.4.2.3', '0.4.2.2') > 0, 'semver newer');
+assert(!isNewerVersion('0.4.2.3'), 'same version not newer');
 assert(isNewerVersion('0.4.3'), '0.4.3 is newer');
 _setRemoteVersionForTest({ version: '0.4.3', notes: ['Тест'] });
 assert(hasPendingUpdate(), 'pending update detected');
@@ -881,7 +881,7 @@ assert(Game.time > 0, 'game advances after rAF frames');
 globalThis.window.requestAnimationFrame = prevRaf;
 
 const { GameVersion } = await import('./js/config/gameVersion.js');
-assert(GameVersion.version === '0.4.2.2', 'GameVersion is 0.4.2.2');
+assert(GameVersion.version === '0.4.2.3', 'GameVersion is 0.4.2.3');
 assert(GameVersion.changes.length <= 8, 'patch notes capped at 8 items');
 
 const { StationApi } = await import('./js/systems/stationApi.js');
@@ -1283,9 +1283,9 @@ assert(migrated.tankerTruck.level === 1, 'migration tanker level I');
 assert(migrated.fleet.level === 1, 'migration fleet level I');
 assert(migrated.depot.res <= migrated.depot.cap, 'migration clamps fuel');
 assert(isNewerVersion('0.4.3'), 'semver newer');
-assert(!isNewerVersion('0.4.2.2'), 'same version not newer');
+assert(!isNewerVersion('0.4.2.3'), 'same version not newer');
 _resetVersionNotificationForTest();
-showVersionNotification('0.4.2.2');
+showVersionNotification('0.4.2.3');
 assert(true, 'version notification once per session');
 
 // v0.4.2.1 — аварийный обмен бонусов
@@ -1336,6 +1336,97 @@ FD.newGame('campaign', 1);
 assert(Game.money === 50000 && Game.bonuses === 0, 'fresh newGame defaults');
 assert(tryRestoreRunEconomy(), 'restore same level economy');
 assert(Game.money === 12345 && Game.bonuses === 67890, 'money/bonuses restored after reload path');
+clearRunEconomy();
+
+// v0.4.2.3 — spawn budget = targetCars (не served)
+const { getSpawnBudget, getSpawnedCars, canSpawnRegularCar, spawnRegularCar, tickSpawnPipeline } =
+  await import('./js/systems/spawnSystem.js');
+
+FD.newGame('campaign', 2);
+assert(getTargetCars() === 130, 'level 2 targetCars 130');
+assert(getSpawnBudget() === 130, 'spawnBudget = targetCars');
+assert(getSpawnedCars() === 0, 'spawned starts at 0');
+assert(Game.stats.served === 0, 'served starts at 0');
+assert(canSpawnRegularCar(), 'can spawn at start');
+
+let made = 0;
+for (let i = 0; i < 200; i++) {
+  const c = spawnRegularCar(0);
+  if (c) made++;
+}
+assert(made === 130, 'spawnRegularCar caps at 130');
+assert(getSpawnedCars() === 130, 'spawned counter 130');
+assert(!canSpawnRegularCar(), 'budget reached blocks further cars');
+assert(Game.stats.served === 0, 'served untouched by spawn budget');
+assert(spawnRegularCar(0) == null, 'no car object past budget');
+
+FD.newGame('campaign', 2);
+Game.holder = [];
+Game.prepared = null;
+Game.spawnTimer = 0;
+Game.holderPriorityWait = null;
+for (let i = 0; i < 400; i++) {
+  tickSpawnPipeline(10, 0);
+  // drain holder so pipeline keeps creating (not stuck on full holder)
+  while (Game.holder.length) Game.holder.pop();
+  if (Game.prepared && Game.prepared.ready && Game.prepared.vehicle) {
+    Game.holder.push(Game.prepared.vehicle);
+    Game.prepared = null;
+  }
+}
+assert(getSpawnedCars() === 130, 'tickSpawnPipeline never exceeds target');
+assert(getSpawnedCars() <= getTargetCars(), 'invariant spawned <= target');
+Game.stats.served = 120;
+assert(Game.state === 'play', 'D: level continues at served 120 / spawned 130');
+assert(getSpawnedCars() === 130 && Game.stats.served === 120, 'D: spawned 130 served 120');
+
+// Scalper не в бюджете
+FD.newGame('campaign', 2);
+Game.stats.spawned = 130;
+assert(!canSpawnRegularCar(), 'regular blocked at budget');
+const scBudget = FD.makeScalper();
+assert(scBudget && scBudget.kind === 'scalper', 'F: scalper factory still works');
+assert(getSpawnedCars() === 130, 'F: scalper does not bump spawned');
+
+// Endless без лимита
+FD.newGame('endless');
+assert(getSpawnBudget() == null, 'G: endless no spawn budget');
+assert(canSpawnRegularCar(), 'G: endless can spawn');
+let endlessMade = 0;
+for (let i = 0; i < 50; i++) {
+  if (spawnRegularCar(0)) endlessMade++;
+}
+assert(endlessMade === 50, 'G: endless spawns past any campaign target');
+assert(getSpawnedCars() === 50, 'G: endless counts spawned but no cap');
+
+// Restart сбрасывает spawned
+FD.newGame('campaign', 2);
+Game.stats.spawned = 80;
+Game.stats.served = 40;
+restartCurrentLevel();
+assert(getSpawnedCars() === 0 && Game.stats.served === 0, 'H: restart resets spawned/served');
+
+// Reload сохраняет spawn budget
+clearRunEconomy();
+FD.newGame('campaign', 2);
+Game.stats.spawned = 120;
+Game.stats.served = 90;
+Game.money = 33333;
+Game.bonuses = 111;
+saveRunEconomy();
+const spawnSnap = readRunEconomy();
+assert(spawnSnap && spawnSnap.spawned === 120 && spawnSnap.served === 90, 'I: snapshot has spawned/served');
+markResumePending();
+consumeResumePending();
+FD.newGame('campaign', 2);
+assert(getSpawnedCars() === 0, 'I: fresh newGame zero spawned');
+assert(tryRestoreRunEconomy(), 'I: restore after reload');
+assert(getSpawnedCars() === 120 && Game.stats.served === 90, 'I: spawned/served restored');
+assert(Game.money === 33333, 'I: money still restored');
+assert(getSpawnedCars() === 120 && canSpawnRegularCar(), 'I: 10 budget left after restore');
+let left = 0;
+for (let i = 0; i < 20; i++) if (spawnRegularCar(0)) left++;
+assert(left === 10 && getSpawnedCars() === 130, 'I: only remaining budget after reload');
 clearRunEconomy();
 
 // v0.3.1.1 — UX бензовозов и подготовка после возврата

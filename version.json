@@ -1,8 +1,8 @@
 {
-  "version": "0.4.2.2",
+  "version": "0.4.2.3",
   "notes": [
-    "Tanker credit restored in order menu via canOrderTanker",
-    "UI shows balance and balance after order",
-    "Debt-limit error instead of cash-only block"
+    "Campaign spawn budget: regular cars <= targetCars",
+    "Scalper excluded from spawn budget and served",
+    "Persist spawned/served across reload"
   ]
 }

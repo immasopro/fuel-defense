@@ -27,6 +27,15 @@ ES module live bindings resolve these at call time (no top-level circular init).
 5. **`holderBusy`** — module-level flag kept in `trafficSystem.js` per assignment.
 6. **Headless test** — uses `globalThis.__FD_HEADLESS__` to skip `boot()`; DOM is mocked minimally (no full canvas semantics).
 
+## Patch 0.4.2.3 — Campaign spawn budget = targetCars
+
+- **Rule** — regular client cars: `spawned <= targetCars`; stop spawning when budget reached.
+- **Not served** — spawn gate uses `stats.spawned`, never `stats.served`.
+- **Scalper** — separate spawn path; not in budget / served / win count.
+- **Endless** — no hard spawn budget (`getTargetCars() === null`).
+- **Save** — `spawned` (+ `served`) in run economy snapshot so reload cannot reset the budget.
+- **APK** — rebuilt as v0.4.2.3.
+
 ## Patch 0.4.2.2 — Tanker credit restored in order menu
 
 - **Policy** — UI and `callTanker(order)` use existing `canOrderTanker` (after purchase balance ≥ −cost); no new debt cap.

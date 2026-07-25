@@ -74,14 +74,48 @@ function getServedHudText() {
   return Game.stats.served + ' / ' + target;
 }
 
+/** Бюджет обычных машин уровня; null = без лимита (endless). */
+function getSpawnBudget() {
+  return getTargetCars();
+}
+
+function getSpawnedCars() {
+  return Game.stats.spawned || 0;
+}
+
+/** Можно ли создать ещё одного обычного клиента (не Scalper). */
+function canSpawnRegularCar() {
+  const budget = getSpawnBudget();
+  if (budget == null) return true;
+  return getSpawnedCars() < budget;
+}
+
+/**
+ * Создать обычный клиентский автомобиль с учётом spawnBudget.
+ * @returns {object|null}
+ */
+function spawnRegularCar(diff) {
+  if (!canSpawnRegularCar()) return null;
+  const car = makeCar(diff);
+  Game.stats.spawned = getSpawnedCars() + 1;
+  return car;
+}
+
 function tickSpawnPipeline(dt, diff) {
   if (Game.prepared && !Game.prepared.ready) {
     Game.prepared.t -= dt;
     if (Game.prepared.t <= 0) {
-      Game.prepared.ready = true;
-      Game.prepared.vehicle = Game.prepared.factory();
-      if (Game.holder.length < CONFIG.holder.max && !Game.holderPriorityWait) fillHolderSlot();
-      onHolderChanged();
+      const car = typeof Game.prepared.factory === 'function'
+        ? Game.prepared.factory()
+        : spawnRegularCar(diff);
+      if (!car) {
+        Game.prepared = null;
+      } else {
+        Game.prepared.ready = true;
+        Game.prepared.vehicle = car;
+        if (Game.holder.length < CONFIG.holder.max && !Game.holderPriorityWait) fillHolderSlot();
+        onHolderChanged();
+      }
     }
   }
   Game.spawnTimer -= dt;
@@ -91,15 +125,27 @@ function tickSpawnPipeline(dt, diff) {
     if (Game.holderPriorityWait) {
       Game.holder.unshift(Game.holderPriorityWait);
       Game.holderPriorityWait = null;
-    } else {
-      Game.holder.push(makeCar(diff));
+      Game.spawnTimer = iv;
+      onHolderChanged();
+      return;
     }
+    if (!canSpawnRegularCar()) {
+      Game.spawnTimer = iv;
+      return;
+    }
+    const car = spawnRegularCar(diff);
+    if (car) Game.holder.push(car);
     Game.spawnTimer = iv;
     onHolderChanged();
     return;
   }
+  if (!canSpawnRegularCar()) {
+    Game.spawnTimer = iv;
+    if (Game.prepared && !Game.prepared.ready) Game.prepared = null;
+    return;
+  }
   if (!Game.prepared) {
-    Game.prepared = { t: iv, ready: false, factory: () => makeCar(diff) };
+    Game.prepared = { t: iv, ready: false, factory: () => spawnRegularCar(diff) };
   }
 }
 
@@ -161,5 +207,6 @@ function callGBR() {
 export {
   getTargetCars, hasLevelTarget, getEndSpawnInterval, levelProgress, spawnRampProgress,
   currentDiff, currentSpawnInterval, getServedHudText, scalperCooldown,
+  getSpawnBudget, getSpawnedCars, canSpawnRegularCar, spawnRegularCar,
   tickSpawnPipeline, callTanker, callGBR
 };
