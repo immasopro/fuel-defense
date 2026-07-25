@@ -1,8 +1,20 @@
+/* DPI / density: --ui-scale ???????????? ?? js/ui/hud.js::resize() */
+:root{
+  --ui-scale:1;
+  --dpr:1;
+  --fs-stat:calc(14px * var(--ui-scale));
+  --fs-btn:calc(16px * var(--ui-scale));
+  --fs-btn-sub:calc(12px * var(--ui-scale));
+  --btn-min-h:calc(60px * var(--ui-scale));
+  --hud-pad:calc(8px * var(--ui-scale));
+  --tap-min:calc(44px * var(--ui-scale));
+}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;width:100%;overflow:hidden;position:fixed;background:#161b22;
   font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#e6edf3;
-  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-#app{display:flex;flex-direction:column;height:100%}
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
+  -webkit-text-size-adjust:100%;text-size-adjust:100%}
+#app{display:flex;flex-direction:column;height:100%;height:100dvh}
 #stage{flex:1;position:relative;min-height:0}
 #cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
 
@@ -36,15 +48,15 @@ html,body{height:100%;width:100%;overflow:hidden;position:fixed;background:#161b
 
 /* ---- HUD (низ экрана, зона большого пальца) ---- */
 #hud{background:#10141a;border-top:1px solid #2d333b;
-  padding:8px 10px calc(10px + env(safe-area-inset-bottom));
-  display:flex;flex-direction:column;gap:8px}
-#stats{display:flex;gap:6px;font-size:14px;font-weight:700}
-.stat{background:#1c222b;border-radius:9px;padding:7px 4px;flex:1;text-align:center;white-space:nowrap;overflow:hidden}
-#actions{display:flex;gap:10px}
-.act-btn{flex:1;min-height:60px;border:none;border-radius:14px;font:inherit;font-size:16px;
+  padding:var(--hud-pad) calc(10px * var(--ui-scale)) calc(10px * var(--ui-scale) + env(safe-area-inset-bottom));
+  display:flex;flex-direction:column;gap:calc(8px * var(--ui-scale))}
+#stats{display:flex;gap:calc(6px * var(--ui-scale));font-size:var(--fs-stat);font-weight:700}
+.stat{background:#1c222b;border-radius:9px;padding:calc(7px * var(--ui-scale)) 4px;flex:1;text-align:center;white-space:nowrap;overflow:hidden}
+#actions{display:flex;gap:calc(10px * var(--ui-scale))}
+.act-btn{flex:1;min-height:var(--btn-min-h);border:none;border-radius:14px;font:inherit;font-size:var(--fs-btn);
   font-weight:800;color:#fff;background:#2d5be3;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:2px;touch-action:manipulation;cursor:pointer}
-.act-btn .sub{font-size:12px;font-weight:600;opacity:.9;white-space:pre-line;line-height:1.25}
+.act-btn .sub{font-size:var(--fs-btn-sub);font-weight:600;opacity:.9;white-space:pre-line;line-height:1.25}
 .act-btn:active{transform:scale(.96);filter:brightness(1.25)}
 .act-btn:disabled{background:#333a45;color:#8b949e;transform:none;filter:none}
 #btn-gbr{background:#c62828}
@@ -52,19 +64,19 @@ html,body{height:100%;width:100%;overflow:hidden;position:fixed;background:#161b
 #btn-light{background:#2e7d32}
 #btn-light.red-mode{background:#c62828}
 #btn-fs{position:absolute;top:calc(8px + env(safe-area-inset-top));right:8px;z-index:4;
-  min-width:44px;min-height:44px;border:none;border-radius:10px;font:inherit;font-size:13px;
+  min-width:var(--tap-min);min-height:var(--tap-min);border:none;border-radius:10px;font:inherit;font-size:calc(13px * var(--ui-scale));
   font-weight:800;color:#e6edf3;background:rgba(28,34,43,.92);border:1px solid #39404b;
   touch-action:manipulation;cursor:pointer;padding:0 10px}
-#btn-debug{position:absolute;top:calc(8px + env(safe-area-inset-top));right:58px;z-index:4;
-  min-width:44px;min-height:44px;border:none;border-radius:10px;font:inherit;font-size:12px;
+#btn-debug{position:absolute;top:calc(8px + env(safe-area-inset-top));right:calc(58px * var(--ui-scale));z-index:4;
+  min-width:var(--tap-min);min-height:var(--tap-min);border:none;border-radius:10px;font:inherit;font-size:calc(12px * var(--ui-scale));
   font-weight:800;color:#e6edf3;background:rgba(28,34,43,.92);border:1px solid #39404b;
   touch-action:manipulation;cursor:pointer;padding:0 8px}
-#btn-menu-hud{position:absolute;top:calc(8px + env(safe-area-inset-top));right:158px;z-index:4;
-  min-width:44px;min-height:44px;border:none;border-radius:10px;font:inherit;font-size:18px;
+#btn-menu-hud{position:absolute;top:calc(8px + env(safe-area-inset-top));right:calc(158px * var(--ui-scale));z-index:4;
+  min-width:var(--tap-min);min-height:var(--tap-min);border:none;border-radius:10px;font:inherit;font-size:calc(18px * var(--ui-scale));
   font-weight:800;color:#e6edf3;background:rgba(28,34,43,.92);border:1px solid #39404b;
   touch-action:manipulation;cursor:pointer;padding:0}
-#btn-help{position:absolute;top:calc(8px + env(safe-area-inset-top));right:108px;z-index:4;
-  min-width:44px;min-height:44px;border:none;border-radius:10px;font:inherit;font-size:18px;
+#btn-help{position:absolute;top:calc(8px + env(safe-area-inset-top));right:calc(108px * var(--ui-scale));z-index:4;
+  min-width:var(--tap-min);min-height:var(--tap-min);border:none;border-radius:10px;font:inherit;font-size:calc(18px * var(--ui-scale));
   font-weight:800;color:#e6edf3;background:rgba(28,34,43,.92);border:1px solid #39404b;
   touch-action:manipulation;cursor:pointer;padding:0}
 #btn-help:active,#btn-debug:active,#btn-menu-hud:active{transform:scale(.96);filter:brightness(1.25)}

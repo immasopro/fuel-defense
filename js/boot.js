@@ -113,6 +113,13 @@ function initDom() {
   resize();
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', () => setTimeout(resize, 150));
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', resize);
+    window.visualViewport.addEventListener('scroll', resize);
+  }
+  // Android: пересчёт после первого layout / смены density
+  requestAnimationFrame(() => resize());
+  setTimeout(resize, 300);
 
   let tStart = null;
   UI.cv.addEventListener('touchstart', e => {
