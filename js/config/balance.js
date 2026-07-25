@@ -66,9 +66,9 @@ export const balance = {
     cashbackPct: {
       20: 3, 30: 3, 40: 3, 50: 5, 60: 5, 70: 5, 80: 5, 90: 7, 100: 7
     },
-    /** v0.4.2: до 100% стоимости улучшения можно оплатить бонусами */
-    bonusShareStation: 1,
-    bonusShareDepot: 1
+    /** v0.4.2.4: бонусами ≤ 99% стоимости; минимум 1% всегда деньгами */
+    bonusShareStation: 0.99,
+    bonusShareDepot: 0.99
   },
 
   /**

@@ -1,11 +1,14 @@
-/** Окно оплаты улучшения бонусами/деньгами — v0.4.2 */
+/** Окно оплаты улучшения бонусами/деньгами — v0.4.2.4 (макс. 99% бонусами) */
 
 import { Game } from '../core/gameState.js';
-import { fmtRub } from '../core/currency.js';
-import { maxBonusForUpgrade, payUpgrade, ensureBonusBalance } from '../systems/fuelOrderSystem.js';
+import { fmtRub, fmtRubDelta } from '../core/currency.js';
+import {
+  maxBonusForUpgrade, minCashForUpgrade, payUpgrade, ensureBonusBalance
+} from '../systems/fuelOrderSystem.js';
 import { addFloat } from '../systems/economySystem.js';
-import { fmtRubDelta } from '../core/currency.js';
 import { updateHUD } from './hud.js';
+
+const CASH_FLOOR_MSG = 'Минимум 1% стоимости нужно оплатить деньгами';
 
 let pending = null;
 let bonusSpend = 0;
@@ -19,7 +22,9 @@ function ensureEls() {
     slider: document.getElementById('upgrade-pay-slider'),
     total: document.getElementById('upgrade-pay-total'),
     bonus: document.getElementById('upgrade-pay-bonus'),
+    bonusPct: document.getElementById('upgrade-pay-bonus-pct'),
     cash: document.getElementById('upgrade-pay-cash'),
+    cashPct: document.getElementById('upgrade-pay-cash-pct'),
     err: document.getElementById('upgrade-pay-error'),
     confirm: document.getElementById('upgrade-pay-confirm'),
     close: document.getElementById('upgrade-pay-close'),
@@ -43,24 +48,44 @@ function showError(msg) {
   e.classList.remove('hidden');
 }
 
+function splitQuote(cost, spend) {
+  const maxB = maxBonusForUpgrade(cost);
+  const bonus = Math.max(0, Math.min(Math.round(spend), maxB));
+  const cash = cost - bonus;
+  const minCash = minCashForUpgrade(cost);
+  const bonusPct = cost > 0 ? Math.round(bonus * 100 / cost) : 0;
+  const cashPct = cost > 0 ? Math.max(0, 100 - bonusPct) : 0;
+  return { maxB, bonus, cash, minCash, bonusPct, cashPct };
+}
+
+function affordError(cost, cash) {
+  const minCash = minCashForUpgrade(cost);
+  if (Game.money < cash && cash <= minCash) return CASH_FLOOR_MSG;
+  if (Game.money < minCash) return CASH_FLOOR_MSG;
+  if (Game.money < cash) return 'Недостаточно средств';
+  return null;
+}
+
 function refreshQuote() {
   const e = ensureEls();
   if (!pending || !e.root) return;
   const cost = pending.cost;
-  const maxB = maxBonusForUpgrade(cost);
-  bonusSpend = Math.max(0, Math.min(Math.round(bonusSpend), maxB));
-  const cash = cost - bonusSpend;
+  const q = splitQuote(cost, bonusSpend);
+  bonusSpend = q.bonus;
   if (e.total) e.total.textContent = fmtRub(cost);
-  if (e.bonus) e.bonus.textContent = bonusSpend.toLocaleString('ru-RU');
-  if (e.cash) e.cash.textContent = fmtRub(cash);
+  if (e.bonus) e.bonus.textContent = q.bonus.toLocaleString('ru-RU');
+  if (e.bonusPct) e.bonusPct.textContent = q.bonusPct + '%';
+  if (e.cash) e.cash.textContent = fmtRub(q.cash);
+  if (e.cashPct) e.cashPct.textContent = q.cashPct + '%';
   if (e.slider) {
-    e.slider.max = String(maxB);
-    e.slider.value = String(bonusSpend);
+    e.slider.max = String(q.maxB);
+    e.slider.value = String(q.bonus);
+    e.slider.disabled = q.maxB <= 0;
   }
-  if (e.confirm) {
-    const ok = Game.money >= cash;
-    e.confirm.disabled = !ok;
-  }
+  const err = affordError(cost, q.cash);
+  if (e.confirm) e.confirm.disabled = !!err;
+  if (err) showError(err);
+  else hideError();
 }
 
 export function isUpgradePaymentOpen() {
@@ -90,7 +115,8 @@ export function openUpgradePayment(opts) {
     floatPos: opts.floatPos || null,
     onApply: opts.onApply
   };
-  bonusSpend = 0;
+  // По умолчанию — максимум доступных бонусов (≤ 99%)
+  bonusSpend = maxBonusForUpgrade(cost);
   const e = ensureEls();
   if (!e.root) return false;
   hideError();
@@ -103,25 +129,19 @@ export function openUpgradePayment(opts) {
 export function confirmUpgradePayment() {
   if (!pending) return false;
   const cost = pending.cost;
-  const maxB = maxBonusForUpgrade(cost);
-  const spend = Math.max(0, Math.min(Math.round(bonusSpend), maxB));
-  const cashNeed = cost - spend;
-  if (Game.money < cashNeed) {
-    showError('Недостаточно средств');
+  const q = splitQuote(cost, bonusSpend);
+  const err = affordError(cost, q.cash);
+  if (err) {
+    showError(err);
     return false;
   }
-  if (spend + Game.money < cost) {
-    showError('Недостаточно средств');
-    return false;
-  }
-  const pay = payUpgrade(cost, spend);
+  const pay = payUpgrade(cost, q.bonus);
   if (!pay.ok) {
-    showError('Недостаточно средств');
+    showError(affordError(cost, cost - Math.min(q.bonus, maxBonusForUpgrade(cost))) || 'Недостаточно средств');
     return false;
   }
   const applyOk = pending.onApply ? pending.onApply() : true;
   if (applyOk === false) {
-    // откат оплаты, если улучшение не применилось
     Game.money += pay.cash;
     Game.bonuses += pay.bonus;
     showError('Не удалось применить улучшение');
@@ -151,7 +171,8 @@ export function requestUpgradePurchase(opts) {
     openUpgradePayment(opts);
     return 'dialog';
   }
-  if (Game.money < cost) return 'blocked';
+  const minCash = minCashForUpgrade(cost);
+  if (Game.money < cost || Game.money < minCash) return 'blocked';
   const pay = payUpgrade(cost, 0);
   if (!pay.ok) return 'blocked';
   const applyOk = opts.onApply ? opts.onApply() : true;
@@ -193,3 +214,5 @@ export function _setBonusSpendForTest(n) {
   bonusSpend = Math.round(n) || 0;
   refreshQuote();
 }
+
+export { CASH_FLOOR_MSG };

@@ -6,9 +6,10 @@ import { hitDepot, hitStationTank, hitGBRBase, Depot, GBRBase } from '../world/m
 import {
   resUpgradeCost, pumpUpgradeCost, fuelUnlockCost, addPumpCost,
   tankerTruckUpgradeCost, fleetUpgradeCost, gbrBaseUpgradeCost,
-  actionBuyGbrAutoCall, actionUpgradeTankerTruck, actionUpgradeFleet, actionUpgradeGbrBase,
+  actionBuyGbrAutoCall, actionUpgradeGbrBase,
   applyBuildStation, applyUpgradeReservoir, applyUpgradePump, applyUnlockFuel,
-  applyAddPump, applyBuyCanisterReserve, applyUpgradeDepot, canAffordUpgrade
+  applyAddPump, applyBuyCanisterReserve, applyUpgradeDepot,
+  applyUpgradeTankerTruck, applyUpgradeFleet, canAffordUpgrade
 } from '../systems/upgradeSystem.js';
 import { tankerDeliveryCost, tankerTruckCapacity } from '../systems/economySystem.js';
 import { gbrPatrolSpeed, gbrCallCost, gbrFleetPanelLines } from '../systems/gbrLogistics.js';
@@ -84,13 +85,13 @@ function openDepotPanel() {
     tankerTruckCapacity() + ' л/рейс</div>';
   if (tuc != null) {
     html += '<div class="p-row"><button class="p-btn" data-act="tanker-up"' +
-      (!canPayCash(tuc) ? ' disabled' : '') + '>⬆ Бензовоз<span class="cost">' + fmtRub(tuc) +
+      (!canPayDepot(tuc) ? ' disabled' : '') + '>⬆ Бензовоз<span class="cost">' + fmtRub(tuc) +
       ' → ' + CONFIG.tankerTruck.levels[Game.tankerTruck.level] + ' л</span></button></div>';
   }
   html += '<div class="p-info">Автопарк · ' + CONFIG.fleet.maxCount[Game.fleet.level - 1] + ' маш.</div>';
   if (fuc != null) {
     html += '<div class="p-row"><button class="p-btn" data-act="fleet-up"' +
-      (!canPayCash(fuc) ? ' disabled' : '') + '>⬆ Автопарк<span class="cost">' + fmtRub(fuc) +
+      (!canPayDepot(fuc) ? ' disabled' : '') + '>⬆ Автопарк<span class="cost">' + fmtRub(fuc) +
       ' → ' + CONFIG.fleet.maxCount[Game.fleet.level] + ' маш.</span></button></div>';
   }
   html += '<button class="p-btn ghost" data-act="close">Закрыть</button>';
@@ -279,8 +280,21 @@ function handlePanelAction(ds) {
         openDepotPanel();
         return true;
       });
-    } else if (ds.act === 'tanker-up' && actionUpgradeTankerTruck()) openDepotPanel();
-    else if (ds.act === 'fleet-up' && actionUpgradeFleet()) openDepotPanel();
+    } else if (ds.act === 'tanker-up') {
+      const c = tankerTruckUpgradeCost();
+      buyWithBonusDialog(c, { x: Depot.pos.x, y: Depot.pos.y - 30 }, () => {
+        if (!applyUpgradeTankerTruck()) return false;
+        openDepotPanel();
+        return true;
+      });
+    } else if (ds.act === 'fleet-up') {
+      const c = fleetUpgradeCost();
+      buyWithBonusDialog(c, { x: Depot.pos.x, y: Depot.pos.y - 30 }, () => {
+        if (!applyUpgradeFleet()) return false;
+        openDepotPanel();
+        return true;
+      });
+    }
     return;
   }
   if (ref.type === 'build') {

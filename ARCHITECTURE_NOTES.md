@@ -27,6 +27,14 @@ ES module live bindings resolve these at call time (no top-level circular init).
 5. **`holderBusy`** — module-level flag kept in `trafficSystem.js` per assignment.
 6. **Headless test** — uses `globalThis.__FD_HEADLESS__` to skip `boot()`; DOM is mocked minimally (no full canvas semantics).
 
+## Patch 0.4.2.4 — GBR base opposite entry + 99% bonus upgrades
+
+- **GBR base** — `GBRBase.init` anchors to `spawnS + L/2` (opposite car entry), not slot midspan.
+- **Depot upgrades** — Нефтебаза / Бензовоз / Автопарк all use the shared bonus payment dialog.
+- **Cap** — bonuses ≤ 99% of upgrade cost; cash ≥ 1% (never zero via rounding).
+- **UI** — shows bonus/cash percentages; explains when the mandatory cash floor blocks purchase.
+- **APK** — rebuilt as v0.4.2.4.
+
 ## Patch 0.4.2.3 — Campaign spawn budget = targetCars
 
 - **Rule** — regular client cars: `spawned <= targetCars`; stop spawning when budget reached.

@@ -47,7 +47,7 @@ function payDepot(cost, x, y) {
   return true;
 }
 
-/** Только рубли — бонусы нельзя тратить на бензовоз / ГБР / прочее. */
+/** Только рубли — бонусы нельзя тратить (автовызов ГБР и т.п.). */
 function payCashOnly(cost, x, y) {
   if (cost == null || Game.money < cost) return false;
   Game.money -= cost;
@@ -128,16 +128,16 @@ function fleetUpgradeCost() {
 
 function actionUpgradeTankerTruck() {
   const c = tankerTruckUpgradeCost();
-  if (c == null || Game.money < c) return false;
-  if (!payCashOnly(c, Depot.pos.x, Depot.pos.y - 30)) return false;
+  if (c == null || !canAffordUpgrade(c)) return false;
+  if (!payDepot(c, Depot.pos.x, Depot.pos.y - 30)) return false;
   Game.tankerTruck.level++;
   return true;
 }
 
 function actionUpgradeFleet() {
   const c = fleetUpgradeCost();
-  if (c == null || Game.money < c) return false;
-  if (!payCashOnly(c, Depot.pos.x, Depot.pos.y - 30)) return false;
+  if (c == null || !canAffordUpgrade(c)) return false;
+  if (!payDepot(c, Depot.pos.x, Depot.pos.y - 30)) return false;
   Game.fleet.level++;
   onFleetLevelUp();
   return true;
@@ -210,6 +210,19 @@ function applyUpgradeDepot() {
   return true;
 }
 
+function applyUpgradeTankerTruck() {
+  if (tankerTruckUpgradeCost() == null) return false;
+  Game.tankerTruck.level++;
+  return true;
+}
+
+function applyUpgradeFleet() {
+  if (fleetUpgradeCost() == null) return false;
+  Game.fleet.level++;
+  onFleetLevelUp();
+  return true;
+}
+
 export { resUpgradeCost, pumpUpgradeCost, fuelUnlockCost, addPumpCost,
   tankerTruckUpgradeCost, fleetUpgradeCost, gbrBaseUpgradeCost,
   actionBuildStation, actionUpgradeReservoir, actionUpgradePump, actionUnlockFuel,
@@ -217,4 +230,5 @@ export { resUpgradeCost, pumpUpgradeCost, fuelUnlockCost, addPumpCost,
   actionUpgradeTankerTruck, actionUpgradeFleet, actionUpgradeGbrBase,
   applyBuildStation, applyUpgradeReservoir, applyUpgradePump, applyUnlockFuel,
   applyAddPump, applyBuyCanisterReserve, applyUpgradeDepot,
+  applyUpgradeTankerTruck, applyUpgradeFleet,
   canAffordUpgrade };

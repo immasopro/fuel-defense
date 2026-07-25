@@ -1,8 +1,8 @@
 {
-  "version": "0.4.2.3",
+  "version": "0.4.2.4",
   "notes": [
-    "Campaign spawn budget: regular cars <= targetCars",
-    "Scalper excluded from spawn budget and served",
-    "Persist spawned/served across reload"
+    "GBR base anchored opposite car entry",
+    "Depot upgrades (including tanker) use bonus payment UI",
+    "Max 99% bonuses / min 1% cash on all upgrades"
   ]
 }

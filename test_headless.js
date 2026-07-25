@@ -410,6 +410,12 @@ FD.cleanupVehicle(ghost);
 assert(st.pocket.indexOf(ghost) < 0, 'cleanupVehicle clears pocket ghosts');
 
 assert(FD.GBRBase.pos && FD.GBRBase.spawnS > 0, 'GBR base exists');
+{
+  const L = Road.length;
+  const opp = (Road.spawnS + L * 0.5) % L;
+  const d = Math.min(Math.abs(FD.GBRBase.spawnS - opp), L - Math.abs(FD.GBRBase.spawnS - opp));
+  assert(d < 1e-6, 'GBR base opposite car entry (spawnS + L/2)');
+}
 assert(!CONFIG.bgTrafficEnabled, 'neutral traffic disabled');
 
 // v0.4.0 — кампания 20 уровней, динамический спавн, Endless
@@ -805,9 +811,9 @@ assert(despawnLog, 'Despawn complete logged');
 // version check
 const { compareVersions, isNewerVersion, GAME_VERSION, hasPendingUpdate, _setRemoteVersionForTest } =
   await import('./js/systems/versionCheck.js');
-assert(GAME_VERSION === '0.4.2.3', 'GAME_VERSION 0.4.2.3');
-assert(compareVersions('0.4.2.3', '0.4.2.2') > 0, 'semver newer');
-assert(!isNewerVersion('0.4.2.3'), 'same version not newer');
+assert(GAME_VERSION === '0.4.2.4', 'GAME_VERSION 0.4.2.4');
+assert(compareVersions('0.4.2.4', '0.4.2.3') > 0, 'semver newer');
+assert(!isNewerVersion('0.4.2.4'), 'same version not newer');
 assert(isNewerVersion('0.4.3'), '0.4.3 is newer');
 _setRemoteVersionForTest({ version: '0.4.3', notes: ['Тест'] });
 assert(hasPendingUpdate(), 'pending update detected');
@@ -881,7 +887,7 @@ assert(Game.time > 0, 'game advances after rAF frames');
 globalThis.window.requestAnimationFrame = prevRaf;
 
 const { GameVersion } = await import('./js/config/gameVersion.js');
-assert(GameVersion.version === '0.4.2.3', 'GameVersion is 0.4.2.3');
+assert(GameVersion.version === '0.4.2.4', 'GameVersion is 0.4.2.4');
 assert(GameVersion.changes.length <= 8, 'patch notes capped at 8 items');
 
 const { StationApi } = await import('./js/systems/stationApi.js');
@@ -958,7 +964,8 @@ assert(tankerDeliveryCost() === 332500, 'tanker level 5 delivery 332500 rub');
 
 // v0.4.2 — кэшбэк 3/5/7%, оплата улучшений бонусами до 100%
 const { quoteFuelOrder, canAffordFuelOrder, payWithBonus, canAffordWithBonus,
-  stationBonusShare, depotBonusShare, payUpgrade, maxBonusForUpgrade, ensureBonusBalance } =
+  stationBonusShare, depotBonusShare, payUpgrade, maxBonusForUpgrade, ensureBonusBalance,
+  canAffordUpgrade, minCashForUpgrade } =
   await import('./js/systems/fuelOrderSystem.js');
 FD.newGame('campaign', 1);
 assert(Game.money === 50000, 'start money 50000');
@@ -977,7 +984,7 @@ assert(q100.bonuses === 4900, '100% bonuses 7%');
 assert(quoteFuelOrder(15).percent === 20, 'clamp below 20%');
 assert(quoteFuelOrder(105).percent === 100, 'clamp above 100%');
 assert(quoteFuelOrder(55).percent === 50 || quoteFuelOrder(55).percent === 60, 'snap to step');
-assert(stationBonusShare() === 1 && depotBonusShare() === 1, 'bonus share 100%');
+assert(stationBonusShare() === 0.99 && depotBonusShare() === 0.99, 'bonus share 99%');
 
 FD.newGame('campaign', 1);
 FD.actionBuildStation(Road.slots[0], 'a92');
@@ -1077,21 +1084,53 @@ assert(!FD.callTanker({ liters: 1000, cost: 70000, bonuses: 4900 }), 'I: second 
 assert(Game.money === -20000, 'I: balance unchanged');
 
 FD.newGame('campaign', 1);
-Game.money = 0;
-Game.bonuses = 20000;
 const stCost = CONFIG.station.cost;
-assert(canAffordWithBonus(stCost, stationBonusShare()), 'station affordable with 100% bonuses');
-assert(maxBonusForUpgrade(stCost) === stCost, 'max bonus capped by cost');
+const stMinCash = Math.max(1, stCost - Math.floor(stCost * 0.99));
+Game.money = stMinCash;
+Game.bonuses = 20000;
+assert(stationBonusShare() === 0.99, 'station share 99%');
+assert(canAffordWithBonus(stCost, stationBonusShare()), 'station affordable with 99% bonuses + cash');
+assert(maxBonusForUpgrade(stCost) === Math.floor(stCost * 0.99), 'max bonus capped at 99%');
+assert(maxBonusForUpgrade(stCost) === stCost - stMinCash, 'min cash 1% of station');
 const pay = payWithBonus(stCost, stationBonusShare());
-assert(pay.ok && pay.bonus === stCost && pay.cash === 0, 'full bonus allowed');
+assert(pay.ok && pay.bonus === Math.floor(stCost * 0.99) && pay.cash === stMinCash, '99% bonus + 1% cash');
 assert(Game.bonuses === 20000 - pay.bonus, 'bonuses spent on station');
+assert(Game.money === 0, 'cash floor spent');
+
+FD.newGame('campaign', 1);
+Game.money = 500; // 1% of 50000
+Game.bonuses = 70000;
+const depotPay = payUpgrade(50000, 50000);
+assert(depotPay.ok && depotPay.bonus === 49500 && depotPay.cash === 500, '99% bonus upgrade payment');
+assert(Game.bonuses === 70000 - 49500 && Game.money === 0, 'cash floor + bonus remainder');
 
 FD.newGame('campaign', 1);
 Game.money = 0;
-Game.bonuses = 70000;
-const depotPay = payUpgrade(50000, 50000);
-assert(depotPay.ok && depotPay.bonus === 50000 && depotPay.cash === 0, '100% bonus upgrade payment');
-assert(Game.bonuses === 20000 && Game.money === 0, 'only upgrade cost in bonuses spent');
+Game.bonuses = 100000;
+assert(!payUpgrade(100000, 100000).ok, '0 cash blocks 100k upgrade');
+assert(!canAffordUpgrade(100000), 'cannot afford with bonuses only');
+assert(maxBonusForUpgrade(100000) === 99000, 'max bonus 99k of 100k');
+
+FD.newGame('campaign', 1);
+Game.money = -10000;
+Game.bonuses = 100000;
+assert(!canAffordUpgrade(100000), 'negative money blocks even with bonuses');
+assert(!payUpgrade(100000, 99000).ok, 'negative money cannot cover 1% cash');
+
+FD.newGame('campaign', 1);
+Game.money = 1000;
+Game.bonuses = 99000;
+const almost = payUpgrade(100000, 99000);
+assert(almost.ok && almost.bonus === 99000 && almost.cash === 1000, '99k bonus + 1k cash ok');
+assert(Game.money === 0 && Game.bonuses === 0, 'exact 99/1 split spent');
+
+FD.newGame('campaign', 1);
+Game.money = 100000;
+Game.bonuses = 100000;
+assert(maxBonusForUpgrade(100000) === 99000, 'slider max 99k not 100k');
+const maxPay = payUpgrade(100000, 100000);
+assert(maxPay.ok && maxPay.bonus === 99000 && maxPay.cash === 1000, 'clamps to 99%');
+assert(Game.money === 99000 && Game.bonuses === 1000, '1% cash + leftover bonuses');
 
 FD.newGame('campaign', 1);
 Game.money = 40000;
@@ -1103,14 +1142,24 @@ assert(Game.money === 2500 && Game.bonuses === 0, 'mixed balances after pay');
 Game.bonuses = undefined;
 assert(ensureBonusBalance() === 0, 'missing bonusBalance migrates to 0');
 
-const { actionUpgradeTankerTruck } = await import('./js/systems/upgradeSystem.js');
+const { actionUpgradeTankerTruck, actionUpgradeFleet, actionUpgradeDepot,
+  applyUpgradeTankerTruck } = await import('./js/systems/upgradeSystem.js');
 FD.newGame('campaign', 1);
-const tucCash = CONFIG.tankerTruck.upgradeCosts[0];
-Game.money = tucCash;
+const tuc = CONFIG.tankerTruck.upgradeCosts[0];
+Game.money = minCashForUpgrade(tuc);
+Game.bonuses = tuc;
+assert(canAffordUpgrade(tuc), 'tanker upgrade affordable with 99% bonuses');
+assert(actionUpgradeTankerTruck(), 'tanker upgrade with bonuses ok');
+assert(Game.tankerTruck.level === 2, 'tanker leveled');
+assert(Game.bonuses === tuc - Math.floor(tuc * 0.99), 'tanker spent max bonuses');
+assert(Game.money === 0, 'tanker spent min cash');
+
+FD.newGame('campaign', 1);
+Game.money = 0;
 Game.bonuses = 999999;
-assert(actionUpgradeTankerTruck(), 'tanker upgrade cash-only ok');
-assert(Game.bonuses === 999999, 'tanker upgrade does not spend bonuses');
-assert(Game.money === 0, 'tanker upgrade cash deducted');
+assert(!actionUpgradeTankerTruck(), 'tanker blocked at 0 money despite bonuses');
+assert(Game.tankerTruck.level === 1, 'tanker level unchanged when blocked');
+assert(Game.bonuses === 999999, 'no bonus spend when blocked');
 
 FD.newGame('campaign', 1);
 Game.paused = false;
@@ -1118,6 +1167,8 @@ assert(Game.paused === false, 'order menu path does not require pause');
 assert(document.getElementById('top-bar'), 'top-bar UI chrome exists');
 assert(document.getElementById('stat-bonuses'), 'bonus HUD element exists');
 assert(document.getElementById('upgrade-pay'), 'upgrade payment dialog exists');
+assert(document.getElementById('upgrade-pay-bonus-pct'), 'bonus pct label exists');
+assert(document.getElementById('upgrade-pay-cash-pct'), 'cash pct label exists');
 
 // v0.2.10.1 / v0.4.0.3 — перекуп не оплачивает кражу; stolen только после побега
 const { finishScalperFuel, finishFuel, recordScalperTheft, commitScalperEscapeTheft, forfeitScalperTheft } =
@@ -1283,9 +1334,9 @@ assert(migrated.tankerTruck.level === 1, 'migration tanker level I');
 assert(migrated.fleet.level === 1, 'migration fleet level I');
 assert(migrated.depot.res <= migrated.depot.cap, 'migration clamps fuel');
 assert(isNewerVersion('0.4.3'), 'semver newer');
-assert(!isNewerVersion('0.4.2.3'), 'same version not newer');
+assert(!isNewerVersion('0.4.2.4'), 'same version not newer');
 _resetVersionNotificationForTest();
-showVersionNotification('0.4.2.3');
+showVersionNotification('0.4.2.4');
 assert(true, 'version notification once per session');
 
 // v0.4.2.1 — аварийный обмен бонусов

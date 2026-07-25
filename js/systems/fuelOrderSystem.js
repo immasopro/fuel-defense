@@ -54,30 +54,51 @@ export function addBonuses(amount) {
   saveRunEconomy();
 }
 
-/** Макс. бонусов, которые можно потратить на улучшение: min(баланс, стоимость). */
+/** Макс. доля стоимости улучшения, которую можно оплатить бонусами. */
+export function upgradeBonusShare() {
+  const s = CONFIG.fuelOrder.bonusShareStation;
+  return s != null ? s : 0.99;
+}
+
+/** Минимум денег за улучшение: ≥ 1% и никогда 0 при cost > 0. */
+export function minCashForUpgrade(cost) {
+  const c = Math.round(cost || 0);
+  if (c <= 0) return 0;
+  if (c === 1) return 1;
+  const maxBonusByShare = Math.floor(c * upgradeBonusShare());
+  return Math.max(1, c - maxBonusByShare);
+}
+
+/** Макс. бонусов на улучшение: min(баланс, floor(cost×share), cost−minCash). */
 export function maxBonusForUpgrade(cost) {
   ensureBonusBalance();
   const c = Math.round(cost || 0);
   if (c <= 0) return 0;
-  return Math.min(Game.bonuses, c);
+  const maxByShare = Math.floor(c * upgradeBonusShare());
+  const maxByCashFloor = c - minCashForUpgrade(c);
+  return Math.max(0, Math.min(Game.bonuses, maxByShare, maxByCashFloor));
 }
 
 export function bonusUsableForCost(cost, share) {
-  const s = share == null ? 1 : share;
-  const maxBonus = Math.floor(Math.round(cost) * s);
+  const c = Math.round(cost || 0);
+  if (c <= 0) return 0;
+  const s = share == null ? upgradeBonusShare() : share;
+  const maxBonus = Math.min(Math.floor(c * s), c - minCashForUpgrade(c));
   ensureBonusBalance();
-  return Math.min(Game.bonuses, maxBonus);
+  return Math.max(0, Math.min(Game.bonuses, maxBonus));
 }
 
-/** Деньги + бонусы покрывают стоимость (доля бонусов до share, по умолчанию 100%). */
+/** Деньги + бонусы покрывают стоимость (доля бонусов до share). */
 export function canAffordWithBonus(cost, share) {
   if (cost == null) return false;
-  const bonus = bonusUsableForCost(cost, share == null ? 1 : share);
-  return Game.money >= Math.round(cost) - bonus;
+  const c = Math.round(cost);
+  const bonus = bonusUsableForCost(c, share == null ? upgradeBonusShare() : share);
+  const cash = c - bonus;
+  return Game.money >= cash && cash >= minCashForUpgrade(c);
 }
 
 export function canAffordUpgrade(cost) {
-  return canAffordWithBonus(cost, 1);
+  return canAffordWithBonus(cost, upgradeBonusShare());
 }
 
 /**
@@ -88,8 +109,12 @@ export function payWithBonus(cost, share) {
   if (cost == null || !canAffordWithBonus(cost, share)) {
     return { ok: false, cash: 0, bonus: 0 };
   }
-  const bonus = bonusUsableForCost(cost, share);
-  const cash = Math.round(cost) - bonus;
+  const c = Math.round(cost);
+  const bonus = bonusUsableForCost(c, share == null ? upgradeBonusShare() : share);
+  const cash = c - bonus;
+  if (cash < minCashForUpgrade(c) || Game.money < cash) {
+    return { ok: false, cash: 0, bonus: 0 };
+  }
   Game.money -= cash;
   Game.bonuses = (Game.bonuses || 0) - bonus;
   saveRunEconomy();
@@ -98,7 +123,7 @@ export function payWithBonus(cost, share) {
 
 /**
  * Оплата с явным количеством бонусов (окно улучшения).
- * bonusSpend ограничивается min(cost, баланс).
+ * bonusSpend ограничивается maxBonusForUpgrade (≤ 99%, cash ≥ 1%).
  */
 export function payUpgrade(cost, bonusSpend) {
   const c = Math.round(cost);
@@ -106,6 +131,7 @@ export function payUpgrade(cost, bonusSpend) {
   ensureBonusBalance();
   const bonus = Math.max(0, Math.min(Math.round(bonusSpend || 0), maxBonusForUpgrade(c)));
   const cash = c - bonus;
+  if (cash < minCashForUpgrade(c)) return { ok: false, cash: 0, bonus: 0 };
   if (Game.money < cash) return { ok: false, cash: 0, bonus: 0 };
   Game.money -= cash;
   Game.bonuses -= bonus;
@@ -113,11 +139,11 @@ export function payUpgrade(cost, bonusSpend) {
   return { ok: true, cash, bonus };
 }
 
-/** v0.4.2: до 100% стоимости улучшения можно оплатить бонусами. */
+/** v0.4.2.4: до 99% стоимости улучшения можно оплатить бонусами. */
 export function stationBonusShare() {
-  return CONFIG.fuelOrder.bonusShareStation ?? 1;
+  return CONFIG.fuelOrder.bonusShareStation ?? 0.99;
 }
 
 export function depotBonusShare() {
-  return CONFIG.fuelOrder.bonusShareDepot ?? 1;
+  return CONFIG.fuelOrder.bonusShareDepot ?? 0.99;
 }
