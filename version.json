@@ -1,7 +1,8 @@
 {
-  "version": "0.4.1",
+  "version": "0.4.2.1",
   "notes": [
-    "Flexible tanker fuel order + bonus cashback",
-    "Start money 50000"
+    "Emergency bonus-to-cash exchange at 2:1",
+    "Fixed packs 10k/50k/100k bonuses",
+    "Bonus account menu from HUD tally"
   ]
 }
