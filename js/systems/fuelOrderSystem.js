@@ -2,7 +2,7 @@
 
 import { CONFIG } from '../config/index.js';
 import { Game } from '../core/gameState.js';
-import { tankerTruckCapacity } from './economySystem.js';
+import { tankerTruckCapacity, canOrderTanker } from './economySystem.js';
 import { saveRunEconomy } from './runEconomySave.js';
 
 export function normalizeOrderPercent(pct) {
@@ -30,11 +30,15 @@ export function quoteFuelOrder(percent) {
   return { percent: pct, capacity: cap, liters, pricePerLiter, cost, cashbackPct, bonuses };
 }
 
-/** Строгая проверка для меню заказа: нужны деньги ≥ стоимости (без кредита). */
+/**
+ * Доступность заказа топлива — та же кредитная политика, что canOrderTanker:
+ * после списания баланс не ниже −cost (эквивалентно bal >= 0 при положительном cost).
+ * Бонусы не учитываются.
+ */
 export function canAffordFuelOrder(quote, money) {
   const bal = money != null ? money : Game.money;
   const cost = quote?.cost ?? 0;
-  return bal >= cost;
+  return canOrderTanker(bal, cost);
 }
 
 export function ensureBonusBalance() {

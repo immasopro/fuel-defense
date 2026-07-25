@@ -27,6 +27,13 @@ ES module live bindings resolve these at call time (no top-level circular init).
 5. **`holderBusy`** — module-level flag kept in `trafficSystem.js` per assignment.
 6. **Headless test** — uses `globalThis.__FD_HEADLESS__` to skip `boot()`; DOM is mocked minimally (no full canvas semantics).
 
+## Patch 0.4.2.2 — Tanker credit restored in order menu
+
+- **Policy** — UI and `callTanker(order)` use existing `canOrderTanker` (after purchase balance ≥ −cost); no new debt cap.
+- **UI** — shows balance / balance-after; debt-limit error instead of cash-only block; confirm enabled when credit allows.
+- **Bonuses** — still not spent on fuel; cashback unchanged.
+- **APK** — rebuilt as v0.4.2.2.
+
 ## Patch 0.4.2.1 — Emergency bonus → cash exchange
 
 - **Rate** — fixed 2 bonuses = 1 ₽; three packs only (10k→5k, 50k→25k, 100k→50k).
@@ -49,7 +56,7 @@ ES module live bindings resolve these at call time (no top-level circular init).
 - **Pricing** — fixed ₽/L and cashback % per load tier; bonuses = cost × cashback.
 - **Bonuses** — spend on station upgrades (≤30%) and depot capacity (≤20%); not on tanker/fleet/GBR/fuel.
 - **Start money** — 50 000 ₽ for new campaign/endless runs.
-- **Order payment** — menu requires cash ≥ cost (no credit on confirmed orders).
+- **Order payment** — initially cash ≥ cost (credit restored in 0.4.2.2 via `canOrderTanker`).
 
 ## Patch 0.4.0.4 — Assign wanted scalper on GBR spawn
 

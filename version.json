@@ -1,8 +1,8 @@
 {
-  "version": "0.4.2.1",
+  "version": "0.4.2.2",
   "notes": [
-    "Emergency bonus-to-cash exchange at 2:1",
-    "Fixed packs 10k/50k/100k bonuses",
-    "Bonus account menu from HUD tally"
+    "Tanker credit restored in order menu via canOrderTanker",
+    "UI shows balance and balance after order",
+    "Debt-limit error instead of cash-only block"
   ]
 }

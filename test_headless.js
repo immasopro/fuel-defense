@@ -805,9 +805,9 @@ assert(despawnLog, 'Despawn complete logged');
 // version check
 const { compareVersions, isNewerVersion, GAME_VERSION, hasPendingUpdate, _setRemoteVersionForTest } =
   await import('./js/systems/versionCheck.js');
-assert(GAME_VERSION === '0.4.2.1', 'GAME_VERSION 0.4.2.1');
-assert(compareVersions('0.4.2.1', '0.4.2') > 0, 'semver newer');
-assert(!isNewerVersion('0.4.2.1'), 'same version not newer');
+assert(GAME_VERSION === '0.4.2.2', 'GAME_VERSION 0.4.2.2');
+assert(compareVersions('0.4.2.2', '0.4.2.1') > 0, 'semver newer');
+assert(!isNewerVersion('0.4.2.2'), 'same version not newer');
 assert(isNewerVersion('0.4.3'), '0.4.3 is newer');
 _setRemoteVersionForTest({ version: '0.4.3', notes: ['Тест'] });
 assert(hasPendingUpdate(), 'pending update detected');
@@ -881,7 +881,7 @@ assert(Game.time > 0, 'game advances after rAF frames');
 globalThis.window.requestAnimationFrame = prevRaf;
 
 const { GameVersion } = await import('./js/config/gameVersion.js');
-assert(GameVersion.version === '0.4.2.1', 'GameVersion is 0.4.2.1');
+assert(GameVersion.version === '0.4.2.2', 'GameVersion is 0.4.2.2');
 assert(GameVersion.changes.length <= 8, 'patch notes capped at 8 items');
 
 const { StationApi } = await import('./js/systems/stationApi.js');
@@ -994,9 +994,87 @@ FD.newGame('campaign', 1);
 FD.actionBuildStation(Road.slots[0], 'a92');
 readyTanker();
 Game.money = 10000;
-assert(!canAffordFuelOrder(quoteFuelOrder(100)), 'cannot afford 100%');
-assert(!FD.callTanker({ liters: 1000, cost: 70000, bonuses: 4900 }), 'reject unaffordable order');
-assert(Game.money === 10000 && Game.bonuses === 0, 'no charge when rejected');
+assert(canAffordFuelOrder(quoteFuelOrder(100)), 'credit allows 100% at 10k');
+assert(FD.callTanker({ liters: 1000, cost: 70000, bonuses: 4900 }), 'order on credit succeeds');
+assert(Game.money === 10000 - 70000, 'credit deducts to -60k');
+assert(Game.bonuses === 4900, 'cashback on credit order');
+assert(Game.tanker.unit && Game.tanker.unit.load === 1000, 'tanker load on credit');
+
+// v0.4.2.2 — меню/callTanker(order) используют canOrderTanker
+FD.newGame('campaign', 1);
+FD.actionBuildStation(Road.slots[0], 'a92');
+readyTanker();
+Game.money = 70000;
+assert(canAffordFuelOrder(quoteFuelOrder(100)), 'A: exact cash ok');
+assert(FD.callTanker({ liters: 1000, cost: 70000, bonuses: 4900 }), 'A: exact cash order');
+assert(Game.money === 0, 'A: balance 0');
+
+FD.newGame('campaign', 1);
+FD.actionBuildStation(Road.slots[0], 'a92');
+readyTanker();
+Game.money = 50000;
+assert(canAffordFuelOrder(quoteFuelOrder(100)), 'B: partial credit ok');
+assert(FD.callTanker({ liters: 1000, cost: 70000, bonuses: 4900 }), 'B: partial credit order');
+assert(Game.money === -20000, 'B: balance -20k');
+
+FD.newGame('campaign', 1);
+FD.actionBuildStation(Road.slots[0], 'a92');
+readyTanker();
+Game.money = 1000;
+assert(canAffordFuelOrder(quoteFuelOrder(100)), 'C: deep credit ok');
+assert(FD.callTanker({ liters: 1000, cost: 70000, bonuses: 4900 }), 'C: deep credit order');
+assert(Game.money === -69000, 'C: balance -69k');
+
+FD.newGame('campaign', 1);
+FD.actionBuildStation(Road.slots[0], 'a92');
+readyTanker();
+Game.money = 0;
+assert(canAffordFuelOrder(quoteFuelOrder(100)), 'D: zero balance credit ok');
+assert(FD.callTanker({ liters: 1000, cost: 70000, bonuses: 4900 }), 'D: zero balance order');
+assert(Game.money === -70000, 'D: balance -70k');
+
+FD.newGame('campaign', 1);
+FD.actionBuildStation(Road.slots[0], 'a92');
+readyTanker();
+Game.money = -20000;
+assert(!canAffordFuelOrder(quoteFuelOrder(100)), 'E: already in debt blocked by canOrderTanker');
+assert(!FD.callTanker({ liters: 1000, cost: 70000, bonuses: 4900 }), 'E: debt blocks order');
+assert(Game.money === -20000, 'E: no charge when blocked');
+Game.money = -70000;
+assert(!canAffordFuelOrder(quoteFuelOrder(100)), 'E: -70k blocked');
+assert(!canOrderTanker(-70000, 70000), 'E: legacy same rule');
+
+FD.newGame('campaign', 1);
+FD.actionBuildStation(Road.slots[0], 'a92');
+readyTanker();
+Game.money = 10000;
+Game.bonuses = 100000;
+const bonBefore = Game.bonuses;
+assert(canAffordFuelOrder(quoteFuelOrder(100)), 'F: credit ignores bonuses');
+assert(FD.callTanker({ liters: 1000, cost: 70000, bonuses: 4900 }), 'F: order via credit not bonuses');
+assert(Game.money === -60000, 'F: money goes negative');
+assert(Game.bonuses === bonBefore + 4900, 'F: bonuses only cashback, not spent');
+
+FD.newGame('campaign', 1);
+FD.actionBuildStation(Road.slots[0], 'a92');
+Game.money = 10000;
+for (const pct of [20, 30, 40, 50, 60, 70, 80, 90, 100]) {
+  const q = quoteFuelOrder(pct);
+  assert(canAffordFuelOrder(q), 'G: credit for ' + pct + '%');
+  assert(canOrderTanker(Game.money, q.cost), 'G: same as canOrderTanker ' + pct + '%');
+}
+
+FD.newGame('campaign', 1);
+FD.actionBuildStation(Road.slots[0], 'a92');
+readyTanker();
+Game.money = 50000;
+assert(FD.callTanker({ liters: 1000, cost: 70000, bonuses: 4900 }), 'I: first order');
+assert(Game.money === -20000, 'I: after first -20k');
+Game.tanker.unit = null;
+readyTanker();
+assert(!canAffordFuelOrder(quoteFuelOrder(100)), 'I: second order blocked while in debt');
+assert(!FD.callTanker({ liters: 1000, cost: 70000, bonuses: 4900 }), 'I: second order rejected');
+assert(Game.money === -20000, 'I: balance unchanged');
 
 FD.newGame('campaign', 1);
 Game.money = 0;
@@ -1205,9 +1283,9 @@ assert(migrated.tankerTruck.level === 1, 'migration tanker level I');
 assert(migrated.fleet.level === 1, 'migration fleet level I');
 assert(migrated.depot.res <= migrated.depot.cap, 'migration clamps fuel');
 assert(isNewerVersion('0.4.3'), 'semver newer');
-assert(!isNewerVersion('0.4.2.1'), 'same version not newer');
+assert(!isNewerVersion('0.4.2.2'), 'same version not newer');
 _resetVersionNotificationForTest();
-showVersionNotification('0.4.2.1');
+showVersionNotification('0.4.2.2');
 assert(true, 'version notification once per session');
 
 // v0.4.2.1 — аварийный обмен бонусов
