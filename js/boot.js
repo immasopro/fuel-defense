@@ -13,6 +13,7 @@ import { toggleDebugOverlay } from './debug/debugOverlay.js';
 import { initManualUi } from './ui/manual.js';
 import { initGameMenuUi } from './ui/gameMenu.js';
 import { initTankerOrderUi, openTankerOrderMenu } from './ui/tankerOrderMenu.js';
+import { initUpgradePaymentUi } from './ui/upgradePaymentMenu.js';
 import { checkForUpdate, isNewerVersion } from './systems/versionCheck.js';
 import { showVersionNotification } from './ui/versionNotification.js';
 import { isEndlessUnlocked } from './systems/campaignSave.js';
@@ -105,6 +106,7 @@ function bindEvents() {
   initManualUi(bindTap);
   initGameMenuUi(bindTap);
   initTankerOrderUi();
+  initUpgradePaymentUi();
 }
 
 function initDom() {
@@ -114,6 +116,7 @@ function initDom() {
   UI.panel = document.getElementById('panel');
   UI.warning = document.getElementById('warning');
   UI.statMoney = document.getElementById('stat-money');
+  UI.statBonuses = document.getElementById('stat-bonuses');
   UI.statTraffic = document.getElementById('stat-traffic');
   UI.statTime = document.getElementById('stat-time');
   UI.btnTanker = document.getElementById('btn-tanker');

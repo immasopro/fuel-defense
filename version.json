@@ -1,7 +1,8 @@
 {
-  "version": "0.4.1",
+  "version": "0.4.2",
   "notes": [
-    "Flexible tanker fuel order + bonus cashback",
-    "Start money 50000"
+    "Adaptive UI safe zone for chrome buttons",
+    "Bonus HUD panel + 3/5/7% cashback",
+    "Upgrade payment slider up to 100% bonuses"
   ]
 }

@@ -9,6 +9,7 @@ import { getServedHudText } from '../systems/spawnSystem.js';
 import { canDispatchTanker, tankerButtonSub } from '../systems/tankerLogistics.js';
 import { gbrButtonSub, gbrCallCost, canDispatchGbr } from '../systems/gbrLogistics.js';
 import { refreshTankerOrderQuote, isTankerOrderOpen } from './tankerOrderMenu.js';
+import { ensureBonusBalance } from '../systems/fuelOrderSystem.js';
 import {
   getUnlocked, setUnlocked, migrateCampaignSave, isEndlessUnlocked, getEndlessBest
 } from '../systems/campaignSave.js';
@@ -83,17 +84,28 @@ function resize() {
   // UI density: mdpi≈1 при ширине designWidth; clamp чтобы HUD не ломался на 2K/ldpi
   const uiScale = clamp(UI.cssW / CANVAS.designWidth, 0.82, 1.4);
   const root = document.documentElement;
-  root.style.setProperty('--ui-scale', uiScale.toFixed(3));
-  root.style.setProperty('--dpr', String(UI.dpr));
-  root.dataset.density = UI.dpr >= 2.5 ? 'xxxhdpi'
-    : UI.dpr >= 2 ? 'xxhdpi'
-      : UI.dpr >= 1.5 ? 'xhdpi'
-        : UI.dpr >= 1.0 ? 'hdpi' : 'mdpi';
+  if (root?.style?.setProperty) {
+    root.style.setProperty('--ui-scale', uiScale.toFixed(3));
+    root.style.setProperty('--dpr', String(UI.dpr));
+  }
+  if (root && root.dataset) {
+    root.dataset.density = UI.dpr >= 2.5 ? 'xxxhdpi'
+      : UI.dpr >= 2 ? 'xxhdpi'
+        : UI.dpr >= 1.5 ? 'xhdpi'
+          : UI.dpr >= 1.0 ? 'hdpi' : 'mdpi';
+  }
+}
+
+function fmtBonuses(n) {
+  return Math.round(n || 0).toLocaleString('ru-RU');
 }
 
 function updateHUD() {
-  UI.statMoney.textContent = '💰 ' + fmtRub(Game.money) +
-    (Game.bonuses > 0 ? ' · ★' + Math.round(Game.bonuses) : '');
+  ensureBonusBalance();
+  UI.statMoney.textContent = '💰 ' + fmtRub(Game.money);
+  if (UI.statBonuses) {
+    UI.statBonuses.textContent = '★ БОНУСЫ: ' + fmtBonuses(Game.bonuses);
+  }
   if (Game.state === 'play') {
     UI.statTime.textContent = '⛽ ' + getServedHudText();
   } else {

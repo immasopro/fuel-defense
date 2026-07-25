@@ -8,7 +8,7 @@ import { fmtRubDelta } from '../core/currency.js';
 import { onFleetLevelUp } from './tankerLogistics.js';
 import { onGbrBaseLevelUp, gbrBaseUpgradeCost } from './gbrLogistics.js';
 import {
-  payWithBonus, canAffordWithBonus, stationBonusShare, depotBonusShare
+  payWithBonus, canAffordWithBonus, canAffordUpgrade, stationBonusShare, depotBonusShare
 } from './fuelOrderSystem.js';
 
 function resUpgradeCost(st) {
@@ -56,7 +56,7 @@ function payCashOnly(cost, x, y) {
 }
 
 function actionBuildStation(slot, fuel) {
-  if (slot.station || !canAffordWithBonus(CONFIG.station.cost, stationBonusShare())) return false;
+  if (slot.station || !canAffordUpgrade(CONFIG.station.cost)) return false;
   if (!payStation(CONFIG.station.cost, slot.pos.x, slot.pos.y - 18)) return false;
   slot.station = new Station(fuel);
   slot.station.slot = slot;
@@ -65,7 +65,7 @@ function actionBuildStation(slot, fuel) {
 
 function actionUpgradeReservoir(st) {
   const c = resUpgradeCost(st);
-  if (c == null || !canAffordWithBonus(c, stationBonusShare())) return false;
+  if (c == null || !canAffordUpgrade(c)) return false;
   if (!payStation(c, st.slot.pos.x, st.slot.pos.y - 18)) return false;
   st.resLevel++;
   st.cap = CONFIG.station.resLevels[st.resLevel - 1];
@@ -76,7 +76,7 @@ function actionUpgradePump(st, j) {
   const pump = st.pumps[j];
   if (!pump) return false;
   const c = pumpUpgradeCost(pump);
-  if (c == null || !canAffordWithBonus(c, stationBonusShare())) return false;
+  if (c == null || !canAffordUpgrade(c)) return false;
   if (!payStation(c, st.slot.pos.x, st.slot.pos.y - 18)) return false;
   pump.level++;
   return true;
@@ -84,7 +84,7 @@ function actionUpgradePump(st, j) {
 
 function actionUnlockFuel(st, fuel) {
   const c = fuelUnlockCost(st);
-  if (c == null || st.unlocked.includes(fuel) || !canAffordWithBonus(c, stationBonusShare())) return false;
+  if (c == null || st.unlocked.includes(fuel) || !canAffordUpgrade(c)) return false;
   if (!payStation(c, st.slot.pos.x, st.slot.pos.y - 18)) return false;
   st.unlocked.push(fuel);
   return true;
@@ -92,7 +92,7 @@ function actionUnlockFuel(st, fuel) {
 
 function actionAddPump(st, fuel) {
   const c = addPumpCost(st);
-  if (c == null || !st.unlocked.includes(fuel) || !canAffordWithBonus(c, stationBonusShare())) return false;
+  if (c == null || !st.unlocked.includes(fuel) || !canAffordUpgrade(c)) return false;
   if (!payStation(c, st.slot.pos.x, st.slot.pos.y - 18)) return false;
   st.pumps.push(new Pump(fuel));
   return true;
@@ -100,7 +100,7 @@ function actionAddPump(st, fuel) {
 
 function actionBuyCanisterReserve(st) {
   const c = CONFIG.canisterReserve.cost;
-  if (st.canisterUp || !canAffordWithBonus(c, stationBonusShare())) return false;
+  if (st.canisterUp || !canAffordUpgrade(c)) return false;
   if (!payStation(c, st.slot.pos.x, st.slot.pos.y - 18)) return false;
   st.canisterUp = true;
   st.canRes = st.canCap;
@@ -155,8 +155,56 @@ function actionUpgradeGbrBase() {
 
 function actionUpgradeDepot() {
   const c = Depot.upgradeCost();
-  if (c == null || !canAffordWithBonus(c, depotBonusShare())) return false;
+  if (c == null || !canAffordUpgrade(c)) return false;
   if (!payDepot(c, Depot.pos.x, Depot.pos.y - 30)) return false;
+  Game.depot.level++;
+  Game.depot.cap = Depot.cap();
+  return true;
+}
+
+/** Apply-only helpers for payment dialog (payment already done). */
+function applyBuildStation(slot, fuel) {
+  if (slot.station) return false;
+  slot.station = new Station(fuel);
+  slot.station.slot = slot;
+  return true;
+}
+
+function applyUpgradeReservoir(st) {
+  if (st.resLevel >= 5) return false;
+  st.resLevel++;
+  st.cap = CONFIG.station.resLevels[st.resLevel - 1];
+  return true;
+}
+
+function applyUpgradePump(st, j) {
+  const pump = st.pumps[j];
+  if (!pump || pump.level >= 5) return false;
+  pump.level++;
+  return true;
+}
+
+function applyUnlockFuel(st, fuel) {
+  if (st.unlocked.includes(fuel) || st.unlocked.length >= Object.keys(CONFIG.fuels).length) return false;
+  st.unlocked.push(fuel);
+  return true;
+}
+
+function applyAddPump(st, fuel) {
+  if (!st.unlocked.includes(fuel) || st.pumps.length >= CONFIG.pump.maxPerStation) return false;
+  st.pumps.push(new Pump(fuel));
+  return true;
+}
+
+function applyBuyCanisterReserve(st) {
+  if (st.canisterUp) return false;
+  st.canisterUp = true;
+  st.canRes = st.canCap;
+  return true;
+}
+
+function applyUpgradeDepot() {
+  if (Depot.upgradeCost() == null) return false;
   Game.depot.level++;
   Game.depot.cap = Depot.cap();
   return true;
@@ -166,4 +214,7 @@ export { resUpgradeCost, pumpUpgradeCost, fuelUnlockCost, addPumpCost,
   tankerTruckUpgradeCost, fleetUpgradeCost, gbrBaseUpgradeCost,
   actionBuildStation, actionUpgradeReservoir, actionUpgradePump, actionUnlockFuel,
   actionAddPump, actionBuyCanisterReserve, actionBuyGbrAutoCall, actionUpgradeDepot,
-  actionUpgradeTankerTruck, actionUpgradeFleet, actionUpgradeGbrBase };
+  actionUpgradeTankerTruck, actionUpgradeFleet, actionUpgradeGbrBase,
+  applyBuildStation, applyUpgradeReservoir, applyUpgradePump, applyUnlockFuel,
+  applyAddPump, applyBuyCanisterReserve, applyUpgradeDepot,
+  canAffordUpgrade };

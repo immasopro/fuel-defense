@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#10141a">
 <meta name="color-scheme" content="dark">
-<title>Fuel Defense v0.4.1</title>
+<title>Fuel Defense v0.4.2</title>
 <link rel="stylesheet" href="css/style.css">
 <script>
 (function () {
@@ -22,12 +22,19 @@
 </head>
 <body>
 <div id="app">
+  <!-- UI-зона: кнопки вне игровой симуляции -->
+  <div id="top-bar" role="toolbar" aria-label="Управление">
+    <div id="top-bar-actions">
+      <button id="btn-menu-hud" type="button" title="Меню">☰</button>
+      <button id="btn-help" type="button" title="Справка">?</button>
+      <button id="btn-debug" type="button">DBG</button>
+      <button id="btn-fs" type="button" title="Полный экран">⛶</button>
+    </div>
+  </div>
+
+  <!-- Игровая зона: только симуляция и её оверлеи -->
   <div id="stage">
     <canvas id="cv"></canvas>
-    <button id="btn-fs" type="button">⛶</button>
-    <button id="btn-menu-hud" type="button" title="Меню">☰</button>
-    <button id="btn-help" type="button" title="Справка">?</button>
-    <button id="btn-debug" type="button">DBG</button>
     <div id="warning" class="hidden"></div>
     <div id="panel" class="hidden"></div>
     <div id="tanker-order-dim" class="tanker-order-dim hidden"></div>
@@ -52,10 +59,24 @@
       <div id="tanker-order-error" class="tanker-order-error hidden"></div>
       <button type="button" class="tanker-order-confirm" id="tanker-order-confirm">Вызвать бензовоз</button>
     </div>
+    <div id="upgrade-pay-dim" class="upgrade-pay-dim hidden"></div>
+    <div id="upgrade-pay" class="upgrade-pay hidden" role="dialog" aria-label="Оплата улучшения">
+      <button type="button" class="upgrade-pay-x" id="upgrade-pay-close" aria-label="Закрыть">✕</button>
+      <div class="upgrade-pay-title">УЛУЧШЕНИЕ</div>
+      <div class="upgrade-pay-cost">Стоимость: <b id="upgrade-pay-total">—</b></div>
+      <div class="upgrade-pay-row"><span>Бонусы</span><b id="upgrade-pay-bonus">0</b></div>
+      <div class="upgrade-pay-row"><span>Деньги</span><b id="upgrade-pay-cash">—</b></div>
+      <input type="range" id="upgrade-pay-slider" class="upgrade-pay-slider" min="0" max="0" step="1" value="0">
+      <div id="upgrade-pay-error" class="upgrade-pay-error hidden"></div>
+      <button type="button" class="upgrade-pay-confirm" id="upgrade-pay-confirm">Купить улучшение</button>
+      <button type="button" class="upgrade-pay-cancel" id="upgrade-pay-cancel">Отмена</button>
+    </div>
   </div>
+
   <div id="hud">
     <div id="stats">
       <div class="stat" id="stat-money">💰 0</div>
+      <div class="stat stat-bonus" id="stat-bonuses">★ БОНУСЫ: 0</div>
       <div class="stat" id="stat-traffic">🚗 —</div>
       <div class="stat" id="stat-time">⏱ —</div>
     </div>
