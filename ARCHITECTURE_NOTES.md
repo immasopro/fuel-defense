@@ -27,13 +27,77 @@ ES module live bindings resolve these at call time (no top-level circular init).
 5. **`holderBusy`** — module-level flag kept in `trafficSystem.js` per assignment.
 6. **Headless test** — uses `globalThis.__FD_HEADLESS__` to skip `boot()`; DOM is mocked minimally (no full canvas semantics).
 
+## Patch 0.4.3.1 — GBR base economy rebalance
+
+- **Upgrade costs** — I→II … IX→X: 40k / 100k / 200k / 500k / 700k / 900k / 1.5M / 2.6M / 5M.
+- **Call cost** — table by `ON_MISSION` count (3×5k then 6–20k); RETURNING/PREPARING/READY ignored.
+- **Depart CD** — base 5s; −1s at base levels V, VIII, X (prepDuration unchanged).
+- **APK** — rebuilt as v0.4.3.1.
+
+## Patch 0.4.3 — 2x speed boost + GBR multi-crew logistics
+
+- **2x** — HUD button; 60s real-time budget per level; pause does not consume; `addSpeedBoostTime(seconds)` for future ads (no SDK).
+- **GBR prep** — all crews prepare in parallel (`prepDuration` 20s); post-return prep is per-crew.
+- **Depart cooldown** — global 5s between dispatches (`gbr.departCooldown`).
+- **GBR button** — red + cost when a READY crew can depart; gray «Рейд» / prep / cooldown otherwise.
+- **Return speed** — verified `CONFIG.gbr.returnSpeed === 60` (unchanged); chase speeds untouched.
+- **APK** — rebuilt as v0.4.3.
+
+## Patch 0.4.2.5 — Scalper end-of-level gate + QUEUE lifecycle fix
+
+- **Special spawn limit** — campaign: no new Scalper when `spawned >= target−10` (≤1000) or `target−20` (>1000). Existing Scalper finishes lifecycle.
+- **D-SPAWN-001** — `tickSpecialSpawns` checks `canSpawnScalper()` before create.
+- **D-SPAWN-002** — `releasePocket` / pocket timeout restore `OWNER:SPECIAL` + `PHASE:DRIVING`.
+- **Approach timeout** — `pocketApproachMax` (40s) while driving to pocket.
+- **APK** — rebuilt as v0.4.2.5.
+
+## Patch 0.4.2.4 — GBR base opposite entry + 99% bonus upgrades
+
+- **GBR base** — `GBRBase.init` anchors to `spawnS + L/2` (opposite car entry), not slot midspan.
+- **Depot upgrades** — Нефтебаза / Бензовоз / Автопарк all use the shared bonus payment dialog.
+- **Cap** — bonuses ≤ 99% of upgrade cost; cash ≥ 1% (never zero via rounding).
+- **UI** — shows bonus/cash percentages; explains when the mandatory cash floor blocks purchase.
+- **APK** — rebuilt as v0.4.2.4.
+
+## Patch 0.4.2.3 — Campaign spawn budget = targetCars
+
+- **Rule** — regular client cars: `spawned <= targetCars`; stop spawning when budget reached.
+- **Not served** — spawn gate uses `stats.spawned`, never `stats.served`.
+- **Scalper** — separate spawn path; not in budget / served / win count.
+- **Endless** — no hard spawn budget (`getTargetCars() === null`).
+- **Save** — `spawned` (+ `served`) in run economy snapshot so reload cannot reset the budget.
+- **APK** — rebuilt as v0.4.2.3.
+
+## Patch 0.4.2.2 — Tanker credit restored in order menu
+
+- **Policy** — UI and `callTanker(order)` use existing `canOrderTanker` (after purchase balance ≥ −cost); no new debt cap.
+- **UI** — shows balance / balance-after; debt-limit error instead of cash-only block; confirm enabled when credit allows.
+- **Bonuses** — still not spent on fuel; cashback unchanged.
+- **APK** — rebuilt as v0.4.2.2.
+
+## Patch 0.4.2.1 — Emergency bonus → cash exchange
+
+- **Rate** — fixed 2 bonuses = 1 ₽; three packs only (10k→5k, 50k→25k, 100k→50k).
+- **UI** — tap HUD `★ БОНУСЫ:` → bonus account menu + confirmation dialog.
+- **No shop** — exclusive bonus store deferred; upgrades still up to 100% bonuses (0.4.2).
+- **Save** — money/bonuses snapshotted during play; resume after reload/APK kill for same level.
+- **APK** — rebuilt as v0.4.2.1.
+
+## Patch 0.4.2 — Adaptive UI, bonus HUD, full bonus upgrades
+
+- **UI safe zone** — `#top-bar` hosts menu/help/debug/fs; game canvas in `#stage` is not covered by chrome.
+- **Bonus HUD** — separate `★ БОНУСЫ:` panel; updates on award/spend.
+- **Cashback** — 20–40% → 3%; 50–80% → 5%; 90–100% → 7% of paid fuel cost.
+- **Upgrades** — station/depot may be paid up to 100% with bonuses via payment dialog + slider.
+- **APK** — rebuilt as v0.4.2 with native immersive fullscreen (fs button hidden).
+
 ## Patch 0.4.1 — Flexible fuel order + bonus account
 
 - **Order menu** — tanker button opens non-pausing order UI; slider 20–100% (10% steps).
 - **Pricing** — fixed ₽/L and cashback % per load tier; bonuses = cost × cashback.
 - **Bonuses** — spend on station upgrades (≤30%) and depot capacity (≤20%); not on tanker/fleet/GBR/fuel.
 - **Start money** — 50 000 ₽ for new campaign/endless runs.
-- **Order payment** — menu requires cash ≥ cost (no credit on confirmed orders).
+- **Order payment** — initially cash ≥ cost (credit restored in 0.4.2.2 via `canOrderTanker`).
 
 ## Patch 0.4.0.4 — Assign wanted scalper on GBR spawn
 
