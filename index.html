@@ -6,17 +6,35 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#10141a">
-<title>Fuel Defense v0.4.1</title>
+<meta name="color-scheme" content="dark">
+<title>Fuel Defense v0.4.2.4</title>
 <link rel="stylesheet" href="css/style.css">
+<script>
+(function () {
+  try {
+    var C = window.Capacitor;
+    if (C && typeof C.isNativePlatform === 'function' && C.isNativePlatform()) {
+      document.documentElement.classList.add('fd-native');
+    }
+  } catch (e) {}
+})();
+</script>
 </head>
 <body>
 <div id="app">
+  <!-- UI-зона: кнопки вне игровой симуляции -->
+  <div id="top-bar" role="toolbar" aria-label="Управление">
+    <div id="top-bar-actions">
+      <button id="btn-menu-hud" type="button" title="Меню">☰</button>
+      <button id="btn-help" type="button" title="Справка">?</button>
+      <button id="btn-debug" type="button">DBG</button>
+      <button id="btn-fs" type="button" title="Полный экран">⛶</button>
+    </div>
+  </div>
+
+  <!-- Игровая зона: только симуляция и её оверлеи -->
   <div id="stage">
     <canvas id="cv"></canvas>
-    <button id="btn-fs" type="button">⛶</button>
-    <button id="btn-menu-hud" type="button" title="Меню">☰</button>
-    <button id="btn-help" type="button" title="Справка">?</button>
-    <button id="btn-debug" type="button">DBG</button>
     <div id="warning" class="hidden"></div>
     <div id="panel" class="hidden"></div>
     <div id="tanker-order-dim" class="tanker-order-dim hidden"></div>
@@ -35,16 +53,53 @@
         <div><span>Объём</span><b id="tanker-order-liters">—</b></div>
         <div><span>Цена</span><b id="tanker-order-price">—</b></div>
         <div><span>Стоимость</span><b id="tanker-order-cost">—</b></div>
+        <div><span>Баланс</span><b id="tanker-order-balance">—</b></div>
+        <div><span>После заказа</span><b id="tanker-order-after">—</b></div>
         <div><span>Кэшбэк</span><b id="tanker-order-cashback">—</b></div>
         <div><span>Бонусы</span><b id="tanker-order-bonuses">—</b></div>
       </div>
       <div id="tanker-order-error" class="tanker-order-error hidden"></div>
       <button type="button" class="tanker-order-confirm" id="tanker-order-confirm">Вызвать бензовоз</button>
     </div>
+    <div id="upgrade-pay-dim" class="upgrade-pay-dim hidden"></div>
+    <div id="upgrade-pay" class="upgrade-pay hidden" role="dialog" aria-label="Оплата улучшения">
+      <button type="button" class="upgrade-pay-x" id="upgrade-pay-close" aria-label="Закрыть">✕</button>
+      <div class="upgrade-pay-title">УЛУЧШЕНИЕ</div>
+      <div class="upgrade-pay-cost">Стоимость: <b id="upgrade-pay-total">—</b></div>
+      <div class="upgrade-pay-row"><span>Бонусы</span><b id="upgrade-pay-bonus">0</b><i id="upgrade-pay-bonus-pct" class="upgrade-pay-pct">0%</i></div>
+      <div class="upgrade-pay-row"><span>Деньги</span><b id="upgrade-pay-cash">—</b><i id="upgrade-pay-cash-pct" class="upgrade-pay-pct">100%</i></div>
+      <input type="range" id="upgrade-pay-slider" class="upgrade-pay-slider" min="0" max="0" step="1" value="0">
+      <div id="upgrade-pay-error" class="upgrade-pay-error hidden"></div>
+      <button type="button" class="upgrade-pay-confirm" id="upgrade-pay-confirm">Купить улучшение</button>
+      <button type="button" class="upgrade-pay-cancel" id="upgrade-pay-cancel">Отмена</button>
+    </div>
+    <div id="bonus-account-dim" class="bonus-account-dim hidden"></div>
+    <div id="bonus-account" class="bonus-account hidden" role="dialog" aria-label="Бонусный счёт">
+      <button type="button" class="bonus-account-x" id="bonus-account-close" aria-label="Закрыть">✕</button>
+      <div class="bonus-account-title">БОНУСНЫЙ СЧЁТ</div>
+      <div class="bonus-account-bal-line">Баланс: <b id="bonus-account-bal">0</b></div>
+      <div class="bonus-account-section">Обменять на деньги</div>
+      <div class="bonus-account-hint">Курс 2 бонуса = 1 ₽ · аварийный обмен</div>
+      <div id="bonus-account-packs" class="bonus-account-packs"></div>
+      <div id="bonus-account-error" class="bonus-account-error hidden"></div>
+    </div>
+    <div id="bonus-exchange-confirm-dim" class="bonus-exchange-confirm-dim hidden"></div>
+    <div id="bonus-exchange-confirm" class="bonus-exchange-confirm hidden" role="dialog" aria-label="Подтверждение обмена">
+      <div class="bonus-exchange-confirm-title">Обмен бонусов</div>
+      <div class="bonus-exchange-confirm-line">Вы потратите: <b id="bonus-exchange-spend">—</b></div>
+      <div class="bonus-exchange-confirm-line">Получите: <b id="bonus-exchange-gain">—</b></div>
+      <div class="bonus-exchange-confirm-line">Курс: <b id="bonus-exchange-rate">2:1</b></div>
+      <div class="bonus-exchange-confirm-actions">
+        <button type="button" class="bonus-exchange-no" id="bonus-exchange-no">Отмена</button>
+        <button type="button" class="bonus-exchange-yes" id="bonus-exchange-yes">Обменять</button>
+      </div>
+    </div>
   </div>
+
   <div id="hud">
     <div id="stats">
       <div class="stat" id="stat-money">💰 0</div>
+      <div class="stat stat-bonus" id="stat-bonuses" role="button" tabindex="0">★ БОНУСЫ: 0</div>
       <div class="stat" id="stat-traffic">🚗 —</div>
       <div class="stat" id="stat-time">⏱ —</div>
     </div>

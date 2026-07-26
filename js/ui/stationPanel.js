@@ -6,21 +6,22 @@ import { hitDepot, hitStationTank, hitGBRBase, Depot, GBRBase } from '../world/m
 import {
   resUpgradeCost, pumpUpgradeCost, fuelUnlockCost, addPumpCost,
   tankerTruckUpgradeCost, fleetUpgradeCost, gbrBaseUpgradeCost,
-  actionBuildStation, actionUpgradeReservoir, actionUpgradePump,
-  actionUnlockFuel, actionAddPump, actionBuyCanisterReserve, actionBuyGbrAutoCall, actionUpgradeDepot,
-  actionUpgradeTankerTruck, actionUpgradeFleet, actionUpgradeGbrBase
+  actionBuyGbrAutoCall, actionUpgradeGbrBase,
+  applyBuildStation, applyUpgradeReservoir, applyUpgradePump, applyUnlockFuel,
+  applyAddPump, applyBuyCanisterReserve, applyUpgradeDepot,
+  applyUpgradeTankerTruck, applyUpgradeFleet, canAffordUpgrade
 } from '../systems/upgradeSystem.js';
 import { tankerDeliveryCost, tankerTruckCapacity } from '../systems/economySystem.js';
 import { gbrPatrolSpeed, gbrCallCost, gbrFleetPanelLines } from '../systems/gbrLogistics.js';
-import { canAffordWithBonus, stationBonusShare, depotBonusShare } from '../systems/fuelOrderSystem.js';
 import { quoteFuelOrder } from '../systems/fuelOrderSystem.js';
+import { requestUpgradePurchase } from './upgradePaymentMenu.js';
 import { UI } from './hud.js';
 
 function canPayStation(c) {
-  return c != null && canAffordWithBonus(c, stationBonusShare());
+  return c != null && canAffordUpgrade(c);
 }
 function canPayDepot(c) {
-  return c != null && canAffordWithBonus(c, depotBonusShare());
+  return c != null && canAffordUpgrade(c);
 }
 function canPayCash(c) {
   return c != null && Game.money >= c;
@@ -84,13 +85,13 @@ function openDepotPanel() {
     tankerTruckCapacity() + ' л/рейс</div>';
   if (tuc != null) {
     html += '<div class="p-row"><button class="p-btn" data-act="tanker-up"' +
-      (!canPayCash(tuc) ? ' disabled' : '') + '>⬆ Бензовоз<span class="cost">' + fmtRub(tuc) +
+      (!canPayDepot(tuc) ? ' disabled' : '') + '>⬆ Бензовоз<span class="cost">' + fmtRub(tuc) +
       ' → ' + CONFIG.tankerTruck.levels[Game.tankerTruck.level] + ' л</span></button></div>';
   }
   html += '<div class="p-info">Автопарк · ' + CONFIG.fleet.maxCount[Game.fleet.level - 1] + ' маш.</div>';
   if (fuc != null) {
     html += '<div class="p-row"><button class="p-btn" data-act="fleet-up"' +
-      (!canPayCash(fuc) ? ' disabled' : '') + '>⬆ Автопарк<span class="cost">' + fmtRub(fuc) +
+      (!canPayDepot(fuc) ? ' disabled' : '') + '>⬆ Автопарк<span class="cost">' + fmtRub(fuc) +
       ' → ' + CONFIG.fleet.maxCount[Game.fleet.level] + ' маш.</span></button></div>';
   }
   html += '<button class="p-btn ghost" data-act="close">Закрыть</button>';
@@ -138,7 +139,6 @@ function openBuildPanel(slot) {
   UI.panel.classList.remove('hidden');
 }
 
-/* Панель АЗС: 4 ветки прокачки + подменю (раздел 9) */
 function openStationPanel(slot, sub) {
   UI.panelRef = { type: 'station', slot, sub: sub || null };
   const st = slot.station;
@@ -154,7 +154,6 @@ function openStationPanel(slot, sub) {
   html += '<br>Обслужено: <b><span id="p-served">' + st.served + '</span></b></div>';
 
   if (!sub) {
-    // четыре основные кнопки
     const rc = resUpgradeCost(st);
     const fc = fuelUnlockCost(st);
     const ac = addPumpCost(st);
@@ -169,23 +168,22 @@ function openStationPanel(slot, sub) {
     html += '<button class="p-btn" data-act="sub" data-sub="add"' +
       (ac == null ? ' disabled' : '') + '>➕ Добавить колонку<span class="cost">' +
       (ac == null ? 'MAX' : fmtRub(ac)) + '</span></button>';
-  const cc = CONFIG.canisterReserve.cost;
-  html += '<button class="p-btn" data-act="canres"' +
-    (st.canisterUp || !canPayStation(cc) ? ' disabled' : '') + '>🧴 Резерв канистр<span class="cost">' +
-    (st.canisterUp ? 'куплено' : fmtRub(cc)) + '</span></button>';
+    const cc = CONFIG.canisterReserve.cost;
+    html += '<button class="p-btn" data-act="canres"' +
+      (st.canisterUp || !canPayStation(cc) ? ' disabled' : '') + '>🧴 Резерв канистр<span class="cost">' +
+      (st.canisterUp ? 'куплено' : fmtRub(cc)) + '</span></button>';
 
-  const gac = CONFIG.gbrAutoCall.cost;
-  if (st.gbrAutoCall) {
-    html += '<div class="p-info" style="margin-top:6px"><b>Охрана</b><br>Статус: Подключена<br>Автовызов: ' +
-      '<button class="p-btn small" data-act="gbr-auto-on"' + (st.gbrAutoCallOn ? ' disabled' : '') + '>ВКЛ</button>' +
-      '<button class="p-btn small" data-act="gbr-auto-off"' + (!st.gbrAutoCallOn ? ' disabled' : '') + '>ВЫКЛ</button></div>';
-  } else {
-    html += '<button class="p-btn" data-act="gbr-auto"' +
-      (!canPayCash(gac) ? ' disabled' : '') + '>🚓 Автовызов ГБР<span class="cost">' + fmtRub(gac) + '</span></button>';
-  }
+    const gac = CONFIG.gbrAutoCall.cost;
+    if (st.gbrAutoCall) {
+      html += '<div class="p-info" style="margin-top:6px"><b>Охрана</b><br>Статус: Подключена<br>Автовызов: ' +
+        '<button class="p-btn small" data-act="gbr-auto-on"' + (st.gbrAutoCallOn ? ' disabled' : '') + '>ВКЛ</button>' +
+        '<button class="p-btn small" data-act="gbr-auto-off"' + (!st.gbrAutoCallOn ? ' disabled' : '') + '>ВЫКЛ</button></div>';
+    } else {
+      html += '<button class="p-btn" data-act="gbr-auto"' +
+        (!canPayCash(gac) ? ' disabled' : '') + '>🚓 Автовызов ГБР<span class="cost">' + fmtRub(gac) + '</span></button>';
+    }
     html += '</div>';
   } else if (sub === 'pump') {
-    // индивидуальная прокачка каждой колонки
     html += '<div class="p-info">Каждая колонка прокачивается отдельно (скорость заправки).</div>';
     st.pumps.forEach((pump, j) => {
       const f = CONFIG.fuels[pump.fuel];
@@ -210,7 +208,6 @@ function openStationPanel(slot, sub) {
     }
     html += '</div><button class="p-btn ghost" data-act="back">← Назад</button>';
   } else if (sub === 'add') {
-    // подменю выбора топлива для новой колонки — только открытые виды
     const ac = addPumpCost(st);
     html += '<div class="p-info">Топливо новой колонки (доступны только открытые виды):</div><div class="p-row">';
     for (const key of st.unlocked) {
@@ -231,7 +228,7 @@ function closePanel() {
   if (UI.panel) UI.panel.classList.add('hidden');
 }
 
-function updatePanelLive() {   // живое обновление цифр в открытой панели
+function updatePanelLive() {
   if (!UI.panelRef) return;
   if (UI.panelRef.type === 'depot') {
     const res = UI.panel.querySelector('#p-depot-res');
@@ -262,6 +259,11 @@ function updatePanelLive() {   // живое обновление цифр в о
   if (can) can.textContent = Math.round(st.canRes);
 }
 
+function buyWithBonusDialog(cost, floatPos, onApply) {
+  if (cost == null || !canAffordUpgrade(cost)) return;
+  requestUpgradePurchase({ cost, floatPos, onApply });
+}
+
 function handlePanelAction(ds) {
   const ref = UI.panelRef;
   if (!ref) return;
@@ -271,26 +273,83 @@ function handlePanelAction(ds) {
     return;
   }
   if (ref.type === 'depot') {
-    if (ds.act === 'depot-up' && actionUpgradeDepot()) openDepotPanel();
-    else if (ds.act === 'tanker-up' && actionUpgradeTankerTruck()) openDepotPanel();
-    else if (ds.act === 'fleet-up' && actionUpgradeFleet()) openDepotPanel();
+    if (ds.act === 'depot-up') {
+      const c = Depot.upgradeCost();
+      buyWithBonusDialog(c, { x: Depot.pos.x, y: Depot.pos.y - 30 }, () => {
+        if (!applyUpgradeDepot()) return false;
+        openDepotPanel();
+        return true;
+      });
+    } else if (ds.act === 'tanker-up') {
+      const c = tankerTruckUpgradeCost();
+      buyWithBonusDialog(c, { x: Depot.pos.x, y: Depot.pos.y - 30 }, () => {
+        if (!applyUpgradeTankerTruck()) return false;
+        openDepotPanel();
+        return true;
+      });
+    } else if (ds.act === 'fleet-up') {
+      const c = fleetUpgradeCost();
+      buyWithBonusDialog(c, { x: Depot.pos.x, y: Depot.pos.y - 30 }, () => {
+        if (!applyUpgradeFleet()) return false;
+        openDepotPanel();
+        return true;
+      });
+    }
     return;
   }
   if (ref.type === 'build') {
-    if (ds.act === 'build' && actionBuildStation(ref.slot, ds.fuel)) closePanel();
+    if (ds.act === 'build') {
+      const slot = ref.slot;
+      buyWithBonusDialog(CONFIG.station.cost, { x: slot.pos.x, y: slot.pos.y - 18 }, () => {
+        if (!applyBuildStation(slot, ds.fuel)) return false;
+        closePanel();
+        return true;
+      });
+    }
     return;
   }
   if (ref.type !== 'station') return;
   const slot = ref.slot, st = slot.station;
   if (!st) { closePanel(); return; }
+  const pos = { x: st.slot.pos.x, y: st.slot.pos.y - 18 };
   switch (ds.act) {
     case 'back': openStationPanel(slot, null); break;
     case 'sub': openStationPanel(slot, ds.sub); break;
-    case 'res': if (actionUpgradeReservoir(st)) openStationPanel(slot, null); break;
-    case 'uppump': if (actionUpgradePump(st, +ds.j)) openStationPanel(slot, 'pump'); break;
-    case 'unlock': if (actionUnlockFuel(st, ds.fuel)) openStationPanel(slot, null); break;
-    case 'addpump': if (actionAddPump(st, ds.fuel)) openStationPanel(slot, null); break;
-    case 'canres': if (actionBuyCanisterReserve(st)) openStationPanel(slot, null); break;
+    case 'res':
+      buyWithBonusDialog(resUpgradeCost(st), pos, () => {
+        if (!applyUpgradeReservoir(st)) return false;
+        openStationPanel(slot, null);
+        return true;
+      });
+      break;
+    case 'uppump':
+      buyWithBonusDialog(pumpUpgradeCost(st.pumps[+ds.j]), pos, () => {
+        if (!applyUpgradePump(st, +ds.j)) return false;
+        openStationPanel(slot, 'pump');
+        return true;
+      });
+      break;
+    case 'unlock':
+      buyWithBonusDialog(fuelUnlockCost(st), pos, () => {
+        if (!applyUnlockFuel(st, ds.fuel)) return false;
+        openStationPanel(slot, null);
+        return true;
+      });
+      break;
+    case 'addpump':
+      buyWithBonusDialog(addPumpCost(st), pos, () => {
+        if (!applyAddPump(st, ds.fuel)) return false;
+        openStationPanel(slot, null);
+        return true;
+      });
+      break;
+    case 'canres':
+      buyWithBonusDialog(CONFIG.canisterReserve.cost, pos, () => {
+        if (!applyBuyCanisterReserve(st)) return false;
+        openStationPanel(slot, null);
+        return true;
+      });
+      break;
     case 'gbr-auto': if (actionBuyGbrAutoCall(st)) openStationPanel(slot, null); break;
     case 'gbr-auto-on': st.gbrAutoCallOn = true; openStationPanel(slot, null); break;
     case 'gbr-auto-off': st.gbrAutoCallOn = false; openStationPanel(slot, null); break;
