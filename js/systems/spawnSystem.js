@@ -91,6 +91,30 @@ function canSpawnRegularCar() {
 }
 
 /**
+ * Запас обычных машин в конце кампании без Scalper (v0.4.2.5).
+ * ≤1000 → 10; >1000 → 20. Endless → null (без лимита).
+ */
+function getSpecialSpawnReserve() {
+  const target = getTargetCars();
+  if (target == null) return null;
+  return target <= 1000 ? 10 : 20;
+}
+
+/** Верхняя граница spawned, до которой ещё можно создать Scalper. */
+function getSpecialSpawnLimit() {
+  const target = getTargetCars();
+  if (target == null) return null;
+  return Math.max(0, target - getSpecialSpawnReserve());
+}
+
+/** Новый Scalper разрешён только пока spawned < specialSpawnLimit (campaign). */
+function canSpawnScalper() {
+  const limit = getSpecialSpawnLimit();
+  if (limit == null) return true;
+  return getSpawnedCars() < limit;
+}
+
+/**
  * Создать обычный клиентский автомобиль с учётом spawnBudget.
  * @returns {object|null}
  */
@@ -208,5 +232,6 @@ export {
   getTargetCars, hasLevelTarget, getEndSpawnInterval, levelProgress, spawnRampProgress,
   currentDiff, currentSpawnInterval, getServedHudText, scalperCooldown,
   getSpawnBudget, getSpawnedCars, canSpawnRegularCar, spawnRegularCar,
+  getSpecialSpawnReserve, getSpecialSpawnLimit, canSpawnScalper,
   tickSpawnPipeline, callTanker, callGBR
 };

@@ -1,8 +1,8 @@
 {
-  "version": "0.4.2.4",
+  "version": "0.4.2.5",
   "notes": [
-    "GBR base anchored opposite car entry",
-    "Depot upgrades (including tanker) use bonus payment UI",
-    "Max 99% bonuses / min 1% cash on all upgrades"
+    "Scalper spawn blocked in last 10/20 cars of campaign level",
+    "Fix stuck QUEUE/OWNER:STATION after missed pocket",
+    "Pocket approach timeout restores Scalper to tour"
   ]
 }

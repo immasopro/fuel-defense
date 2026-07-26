@@ -494,7 +494,8 @@ const { initGbrOnSpawn, gbrSeesScalper, decideAfterArrestExit, gbrCanArrestNow }
   await import('./js/systems/specialVehicles.js');
 const { assignGbrTarget } = await import('./js/systems/gbrPursuit.js');
 const { completeStationExit, ScalperOwner, assertRoadHandoffInvariants, handoffScalperToRoad,
-  beginStationExit, scalperMovementDebug, isVehicleInUpdateLane } =
+  beginStationExit, scalperMovementDebug, isVehicleInUpdateLane,
+  restoreScalperToTour, getScalperOwner, transferScalperOwner } =
   await import('./js/systems/scalperLifecycle.js');
 const gbrRing = makeGBR();
 initGbrOnSpawn(gbrRing);
@@ -811,9 +812,9 @@ assert(despawnLog, 'Despawn complete logged');
 // version check
 const { compareVersions, isNewerVersion, GAME_VERSION, hasPendingUpdate, _setRemoteVersionForTest } =
   await import('./js/systems/versionCheck.js');
-assert(GAME_VERSION === '0.4.2.4', 'GAME_VERSION 0.4.2.4');
-assert(compareVersions('0.4.2.4', '0.4.2.3') > 0, 'semver newer');
-assert(!isNewerVersion('0.4.2.4'), 'same version not newer');
+assert(GAME_VERSION === '0.4.2.5', 'GAME_VERSION 0.4.2.5');
+assert(compareVersions('0.4.2.5', '0.4.2.4') > 0, 'semver newer');
+assert(!isNewerVersion('0.4.2.5'), 'same version not newer');
 assert(isNewerVersion('0.4.3'), '0.4.3 is newer');
 _setRemoteVersionForTest({ version: '0.4.3', notes: ['Тест'] });
 assert(hasPendingUpdate(), 'pending update detected');
@@ -887,7 +888,7 @@ assert(Game.time > 0, 'game advances after rAF frames');
 globalThis.window.requestAnimationFrame = prevRaf;
 
 const { GameVersion } = await import('./js/config/gameVersion.js');
-assert(GameVersion.version === '0.4.2.4', 'GameVersion is 0.4.2.4');
+assert(GameVersion.version === '0.4.2.5', 'GameVersion is 0.4.2.5');
 assert(GameVersion.changes.length <= 8, 'patch notes capped at 8 items');
 
 const { StationApi } = await import('./js/systems/stationApi.js');
@@ -1334,9 +1335,9 @@ assert(migrated.tankerTruck.level === 1, 'migration tanker level I');
 assert(migrated.fleet.level === 1, 'migration fleet level I');
 assert(migrated.depot.res <= migrated.depot.cap, 'migration clamps fuel');
 assert(isNewerVersion('0.4.3'), 'semver newer');
-assert(!isNewerVersion('0.4.2.4'), 'same version not newer');
+assert(!isNewerVersion('0.4.2.5'), 'same version not newer');
 _resetVersionNotificationForTest();
-showVersionNotification('0.4.2.4');
+showVersionNotification('0.4.2.5');
 assert(true, 'version notification once per session');
 
 // v0.4.2.1 — аварийный обмен бонусов
@@ -1479,6 +1480,97 @@ let left = 0;
 for (let i = 0; i < 20; i++) if (spawnRegularCar(0)) left++;
 assert(left === 10 && getSpawnedCars() === 130, 'I: only remaining budget after reload');
 clearRunEconomy();
+
+// v0.4.2.5 — special spawn limit + QUEUE lifecycle fix
+const { getSpecialSpawnLimit, getSpecialSpawnReserve, canSpawnScalper } =
+  await import('./js/systems/spawnSystem.js');
+const { tickSpecialSpawns } = await import('./js/systems/specialVehicles.js');
+const { releasePocket } = await import('./js/stations/stationQueue.js');
+
+FD.newGame('campaign', 5);
+assert(getTargetCars() === 280, 'level 5 target 280');
+assert(getSpecialSpawnReserve() === 10, '≤1000 reserve 10');
+assert(getSpecialSpawnLimit() === 270, 'level 5 special limit 270');
+Game.stats.spawned = 269;
+assert(canSpawnScalper(), 'scalper ok at spawned 269');
+Game.stats.spawned = 270;
+assert(!canSpawnScalper(), 'scalper blocked at specialSpawnLimit');
+Game.stats.spawned = 280;
+assert(!canSpawnScalper(), 'scalper blocked at target');
+
+FD.newGame('campaign', 10);
+assert(getTargetCars() === 1000, 'level 10 target 1000');
+assert(getSpecialSpawnReserve() === 10, '1000 still reserve 10');
+assert(getSpecialSpawnLimit() === 990, '1000 → limit 990');
+
+FD.newGame('campaign', 20);
+assert(getTargetCars() === 5000, 'level 20 target 5000');
+assert(getSpecialSpawnReserve() === 20, '>1000 reserve 20');
+assert(getSpecialSpawnLimit() === 4980, '5000 → limit 4980');
+
+FD.newGame('endless');
+assert(getSpecialSpawnLimit() == null && canSpawnScalper(), 'endless scalper uncapped');
+
+// D-SPAWN-001: no new scalper after limit
+FD.newGame('campaign', 5);
+FD.actionBuildStation(Road.slots[0], 'a92');
+Game.stats.spawned = 270;
+Game.scalper.unit = null;
+Game.scalperTimer = 0;
+tickSpecialSpawns(0);
+assert(!Game.scalper.unit, 'D-001: no scalper at limit 270');
+Game.stats.spawned = 280;
+Game.scalperTimer = 0;
+for (let i = 0; i < 10; i++) tickSpecialSpawns(0);
+assert(!Game.scalper.unit, 'D-001: no scalper at spawned=target');
+
+// Existing scalper survives threshold (not deleted)
+FD.newGame('campaign', 5);
+FD.actionBuildStation(Road.slots[0], 'a92');
+Game.stats.spawned = 269;
+Game.scalper.unit = null;
+Game.scalperTimer = 0;
+tickSpecialSpawns(0);
+assert(Game.scalper.unit, 'scalper spawns before limit');
+const liveSc = Game.scalper.unit;
+Game.stats.spawned = 280;
+tickSpecialSpawns(1);
+assert(Game.scalper.unit === liveSc, 'existing scalper kept after threshold');
+assert(Game.vehicles.includes(liveSc) || Game.holder.includes(liveSc), 'existing scalper still present');
+
+// After despawn past limit — no replacement
+const remLive = new Set();
+despawnScalper(liveSc, remLive);
+for (const v of remLive) {
+  const ix = Game.vehicles.indexOf(v); if (ix >= 0) Game.vehicles.splice(ix, 1);
+  const hx = Game.holder.indexOf(v); if (hx >= 0) Game.holder.splice(hx, 1);
+}
+Game.scalperTimer = 0;
+tickSpecialSpawns(0);
+assert(!Game.scalper.unit, 'no new scalper after despawn past limit');
+
+// D-SPAWN-002: releasePocket restores tour
+FD.newGame('campaign', 5);
+FD.actionBuildStation(Road.slots[0], 'a92');
+Road.slots[0].station.res = 500;
+const scStuck = FD.makeScalper();
+scStuck.fuelKey = 'a92';
+scStuck.tour = [Road.slots[0]];
+scStuck.tourIdx = 0;
+scStuck.lane = 'inner';
+scStuck.state = 'drive';
+scStuck.s = Road.slots[0].s - 20;
+Game.vehicles.push(scStuck);
+Game.scalper.unit = scStuck;
+assert(StationApi.joinStationWaitQueue(scStuck, Road.slots[0]), 'join pocket');
+setScalperPhase(scStuck, ScalperPhase.QUEUE);
+transferScalperOwner(scStuck, ScalperOwner.STATION, 'test_join');
+releasePocket(scStuck);
+assert(getScalperOwner(scStuck) === ScalperOwner.SPECIAL, 'D-002: owner SPECIAL after release');
+assert(scStuck.scalperPhase === ScalperPhase.DRIVING, 'D-002: phase DRIVING after release');
+assert(!scStuck.pocketSlot && !scStuck.targetSlot, 'D-002: pocket cleared');
+assert(restoreScalperToTour(scStuck, 'idempotent') || getScalperOwner(scStuck) === ScalperOwner.SPECIAL,
+  'D-002: restore idempotent');
 
 // v0.3.1.1 — UX бензовозов и подготовка после возврата
 const { tankerButtonSub, onTankerMissionComplete, nearestTankerPrepSeconds,

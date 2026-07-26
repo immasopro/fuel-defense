@@ -184,6 +184,8 @@ export const balance = {
     evolutionBonus: 50,
     fillRate: 25,
     retryChance: 0.2,
+    /** Страховка: слишком долгий подход к карману АЗС (v0.4.2.5) */
+    pocketApproachMax: 40,
     /** Выход с карты (EXITING) — независимо от updateLane */
     exitSpeed: 55,
     exitArriveDist: 12,
