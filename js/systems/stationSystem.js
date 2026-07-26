@@ -7,7 +7,7 @@ import { outerLaneList } from './trafficSystem.js';
 import { finishFuel } from './economySystem.js';
 import { refillCanisterReserve } from '../stations/reservoir.js';
 import { cleanupVehicle, scanForStation, tryApproachPocket, tryApproachPullIn,
-  beginLaneChange, beginPullOut, processStationPocket } from '../stations/stationQueue.js';
+  beginLaneChange, beginPullOut, processStationPocket, releasePocket } from '../stations/stationQueue.js';
 import { StationApi } from './stationApi.js';
 import { ScalperPhase, GbrPhase } from './entityFsm.js';
 import { ScalperOwner, completeStationExit, getScalperOwner, isScalperLeavingMap, updateScalpersLeavingMap } from './scalperLifecycle.js';
@@ -46,8 +46,17 @@ export function updateVehicles(dt, L) {
             }
           }
         } else if (v.kind === 'scalper' && !isScalperLeavingMap(v)) {
-          if (v.pocketSlot && !v.pump) tryApproachPocket(v, L);
-          else if (v.pump) {
+          if (v.pocketSlot && !v.pump) {
+            // Страховка: долгий подход к карману без pullIn
+            v.pocketApproachT = (v.pocketApproachT || 0) + dt;
+            const maxApproach = CONFIG.scalper.pocketApproachMax ?? CONFIG.station.pocketMaxWait;
+            if (v.pocketApproachT > maxApproach) {
+              releasePocket(v);
+              v.tourIdx = (v.tourIdx || 0) + 1;
+            } else {
+              tryApproachPocket(v, L);
+            }
+          } else if (v.pump) {
             const ctx = StationApi.getColumnContext(v);
             if (ctx && ctx.rank > 0) v.stopS = approachStopS(v.targetSlot);
             else tryApproachPullIn(v, L);

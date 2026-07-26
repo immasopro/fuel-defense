@@ -1,7 +1,8 @@
 {
-  "version": "0.4.1",
+  "version": "0.4.3",
   "notes": [
-    "Flexible tanker fuel order + bonus cashback",
-    "Start money 50000"
+    "Scalper spawn blocked in last 10/20 cars of campaign level",
+    "Fix stuck QUEUE/OWNER:STATION after missed pocket",
+    "Pocket approach timeout restores Scalper to tour"
   ]
 }
