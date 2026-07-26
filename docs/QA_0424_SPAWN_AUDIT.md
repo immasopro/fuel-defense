@@ -1,8 +1,8 @@
 # QA Audit 0.4.2.4 — LIFECYCLE / SPAWN INVARIANTS
 
-Status: **audit only — no product fix in this pass**  
-Reproduction: `node --input-type=module -e "await import('./scripts/qa-audit-0424-spawn.mjs')"`  
-Date: 2026-07-26
+Status: **audit completed; fixed in 0.4.2.5**  
+Reproduction (pre-fix): `node --input-type=module -e "await import('./scripts/qa-audit-0424-spawn.mjs')"`  
+Fix: patch **0.4.2.5** (`canSpawnScalper` + `restoreScalperToTour` on `releasePocket`)
 
 ---
 
