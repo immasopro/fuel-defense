@@ -812,11 +812,11 @@ assert(despawnLog, 'Despawn complete logged');
 // version check
 const { compareVersions, isNewerVersion, GAME_VERSION, hasPendingUpdate, _setRemoteVersionForTest } =
   await import('./js/systems/versionCheck.js');
-assert(GAME_VERSION === '0.4.3.1', 'GAME_VERSION 0.4.3.1');
-assert(compareVersions('0.4.3.1', '0.4.3') > 0, 'semver newer');
-assert(!isNewerVersion('0.4.3.1'), 'same version not newer');
-assert(isNewerVersion('0.4.3.2'), '0.4.3.2 is newer');
-_setRemoteVersionForTest({ version: '0.4.3.2', notes: ['Тест'] });
+assert(GAME_VERSION === '0.4.3.2', 'GAME_VERSION 0.4.3.2');
+assert(compareVersions('0.4.3.2', '0.4.3.1') > 0, 'semver newer');
+assert(!isNewerVersion('0.4.3.2'), 'same version not newer');
+assert(isNewerVersion('0.4.3.3'), '0.4.3.3 is newer');
+_setRemoteVersionForTest({ version: '0.4.3.3', notes: ['Тест'] });
 assert(hasPendingUpdate(), 'pending update detected');
 
 // v0.2.8 depot branch + reservoir HUD
@@ -888,7 +888,7 @@ assert(Game.time > 0, 'game advances after rAF frames');
 globalThis.window.requestAnimationFrame = prevRaf;
 
 const { GameVersion } = await import('./js/config/gameVersion.js');
-assert(GameVersion.version === '0.4.3.1', 'GameVersion is 0.4.3.1');
+assert(GameVersion.version === '0.4.3.2', 'GameVersion is 0.4.3.2');
 assert(GameVersion.changes.length <= 8, 'patch notes capped at 8 items');
 
 const { StationApi } = await import('./js/systems/stationApi.js');
@@ -1334,10 +1334,10 @@ const migrated = migrateSaveObject({ version: '0.2.11', depot: { level: 2, res: 
 assert(migrated.tankerTruck.level === 1, 'migration tanker level I');
 assert(migrated.fleet.level === 1, 'migration fleet level I');
 assert(migrated.depot.res <= migrated.depot.cap, 'migration clamps fuel');
-assert(isNewerVersion('0.4.3.2'), 'semver newer');
-assert(!isNewerVersion('0.4.3.1'), 'same version not newer');
+assert(isNewerVersion('0.4.3.3'), 'semver newer');
+assert(!isNewerVersion('0.4.3.2'), 'same version not newer');
 _resetVersionNotificationForTest();
-showVersionNotification('0.4.3.1');
+showVersionNotification('0.4.3.2');
 assert(true, 'version notification once per session');
 
 // v0.4.2.1 — аварийный обмен бонусов
@@ -2128,6 +2128,54 @@ const gbrEmpty = Game.gbr.unit;
 assert(gbrEmpty.gbrPhase === GbrPhase.PATROL, 'PATROL when no wanted');
 assert(gbrEmpty.targetScalperId == null, 'no target when no wanted');
 assert((Game.pursuitEventLog || []).some(e => e.msg.includes('PATROL')), 'PATROL logged on spawn');
+
+// v0.4.3.2 — RETURNING не завершается евклидовой близостью сразу после базы
+{
+  const { distAhead: da } = await import('./js/world/roadNetwork.js');
+  const { updateGBR: ug } = await import('./js/systems/specialVehicles.js');
+  const { onGbrBaseLevelUp: lvlUp } = await import('./js/systems/gbrLogistics.js');
+  function modL(a, len) { return ((a % len) + len) % len; }
+  FD.newGame('campaign', 1);
+  Game.gbrBase.level = 1;
+  const gPast = makeGBR(1);
+  initGbrOnSpawn(gPast);
+  const off = 20;
+  gPast.s = modL(GBRBase.spawnS + off, L);
+  gPast.prevS = gPast.s;
+  gPast.lane = 'outer';
+  gPast.state = 'drive';
+  gPast.v = CONFIG.gbr.returnSpeed;
+  gPast.maxV = CONFIG.gbr.returnSpeed;
+  setGbrPhase(gPast, GbrPhase.RETURNING);
+  gPast.stopS = GBRBase.spawnS;
+  gPast.returnPullOut = false;
+  Game.gbrLogistics.units[0].state = FleetState.RETURNING;
+  Game.gbrLogistics.units[0].vehicle = gPast;
+  Game.vehicles = [gPast];
+  const eu = Math.hypot(
+    GBRBase.pos.x - Road.posAt(gPast.s, 0).x,
+    GBRBase.pos.y - Road.posAt(gPast.s, 0).y
+  );
+  const ahead = da(gPast.s, GBRBase.spawnS, L);
+  assert(eu < 40 && ahead > 30, 'fixture: past base euclid close, ring far');
+  const rem = new Set();
+  ug(gPast, 1 / 30, L, rem);
+  assert(!rem.has(gPast), 'no instant RETURNING complete past base');
+  assert(gPast.gbrPhase === GbrPhase.RETURNING, 'stays RETURNING past base');
+  // Drive almost full lap until within 8 of base
+  let guard = 0;
+  while (da(gPast.s, GBRBase.spawnS, L) >= 8 && guard++ < 20000) {
+    gPast.prevS = gPast.s;
+    gPast.s = modL(gPast.s + CONFIG.gbr.returnSpeed / 30, L);
+    const r2 = new Set();
+    ug(gPast, 1 / 30, L, r2);
+    if (r2.has(gPast)) break;
+  }
+  const r3 = new Set();
+  ug(gPast, 1 / 30, L, r3);
+  assert(r3.has(gPast) || !Game.vehicles.includes(gPast) || da(gPast.s, GBRBase.spawnS, L) < 8,
+    'eventually arrives by ring distance');
+}
 
 // Restart after defeat — Boot.restart() must not throw (Game is module-scoped)
 const { Boot } = await import('./js/boot.js');

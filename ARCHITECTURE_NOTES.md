@@ -27,6 +27,13 @@ ES module live bindings resolve these at call time (no top-level circular init).
 5. **`holderBusy`** — module-level flag kept in `trafficSystem.js` per assignment.
 6. **Headless test** — uses `globalThis.__FD_HEADLESS__` to skip `boot()`; DOM is mocked minimally (no full canvas semantics).
 
+## Patch 0.4.3.2 — GBR RETURNING no Euclidean teleport
+
+- **Bug** — after catch just past base, `dp < 40` completed RETURNING while `ringAhead ≈ L` (visual teleport).
+- **Fix** — arrive only when `distAhead(s, GBRBase.spawnS, L) < 8`.
+- **QA** — `docs/QA_0431_GBR_RETURN_AUDIT.md`, `scripts/qa-audit-0431-gbr-return.mjs`.
+- **APK** — rebuilt as v0.4.3.2.
+
 ## Patch 0.4.3.1 — GBR base economy rebalance
 
 - **Upgrade costs** — I→II … IX→X: 40k / 100k / 200k / 500k / 700k / 900k / 1.5M / 2.6M / 5M.

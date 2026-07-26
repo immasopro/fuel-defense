@@ -680,9 +680,10 @@ function updateGBR(g, dt, L, removeSet) {
   if (g.gbrPhase === GbrPhase.RETURNING) {
     g.stopS = GBRBase.spawnS;
     g.maxV = C.returnSpeed;
-    const p = Road.posAt(g.s, 0);
-    const dp = Math.hypot(GBRBase.pos.x - p.x, GBRBase.pos.y - p.y);
-    if (dp < 40 || distAhead(g.s, GBRBase.spawnS, L) < 8) {
+    // Только кольцевая дистанция вперёд до базы.
+    // Евклидово dp<40 давало телепорт: сразу после прохождения базы
+    // GBR ещё геометрически близко, но ringAhead ≈ длина круга (v0.4.3.2).
+    if (distAhead(g.s, GBRBase.spawnS, L) < 8) {
       releaseGbrTarget(g);
       if (g.fleetId) onGbrMissionComplete(g.fleetId);
       removeSet.add(g);
