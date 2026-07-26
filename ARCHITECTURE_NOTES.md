@@ -27,6 +27,13 @@ ES module live bindings resolve these at call time (no top-level circular init).
 5. **`holderBusy`** — module-level flag kept in `trafficSystem.js` per assignment.
 6. **Headless test** — uses `globalThis.__FD_HEADLESS__` to skip `boot()`; DOM is mocked minimally (no full canvas semantics).
 
+## Patch 0.4.3.1 — GBR base economy rebalance
+
+- **Upgrade costs** — I→II … IX→X: 40k / 100k / 200k / 500k / 700k / 900k / 1.5M / 2.6M / 5M.
+- **Call cost** — table by `ON_MISSION` count (3×5k then 6–20k); RETURNING/PREPARING/READY ignored.
+- **Depart CD** — base 5s; −1s at base levels V, VIII, X (prepDuration unchanged).
+- **APK** — rebuilt as v0.4.3.1.
+
 ## Patch 0.4.3 — 2x speed boost + GBR multi-crew logistics
 
 - **2x** — HUD button; 60s real-time budget per level; pause does not consume; `addSpeedBoostTime(seconds)` for future ads (no SDK).

@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "fuel-defense",
-  "version": "0.4.3",
+  "version": "0.4.3.1",
   "private": true,
   "scripts": {
     "prepare:www": "node scripts/prepare-www.mjs",

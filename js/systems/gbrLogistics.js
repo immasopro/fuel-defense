@@ -1,4 +1,4 @@
-/** Логистика автопарка ГБР — v0.4.3: параллельная подготовка + cooldown выезда */
+/** Логистика автопарка ГБР — v0.4.3.1: экономика базы + таблица вызовов */
 
 import { CONFIG } from '../config/index.js';
 import { Game } from '../core/gameState.js';
@@ -14,8 +14,20 @@ function gbrPrepDuration() {
   return CONFIG.gbrBase.prepDuration;
 }
 
+/** Базовый интервал выезда минус бонусы уровней V / VIII / X. */
+export function gbrDepartCooldownSeconds() {
+  const base = CONFIG.gbr.departCooldown ?? 5;
+  const level = Game.gbrBase?.level || 1;
+  const marks = CONFIG.gbr.departCooldownReductionLevels || [5, 8, 10];
+  let reduce = 0;
+  for (const mark of marks) {
+    if (level >= mark) reduce += 1;
+  }
+  return Math.max(0, base - reduce);
+}
+
 function gbrDepartCooldown() {
-  return CONFIG.gbr.departCooldown ?? 5;
+  return gbrDepartCooldownSeconds();
 }
 
 function makeUnit(id, startPreparing) {
@@ -34,8 +46,17 @@ export function countGbrOnMission() {
   return Game.gbrLogistics.units.filter(u => u.state === FleetState.ON_MISSION).length;
 }
 
+/**
+ * Стоимость следующего выпуска по числу ON_MISSION.
+ * RETURNING / PREPARING / READY не увеличивают цену.
+ */
 export function gbrCallCost() {
-  return CONFIG.gbrBase.baseCallCost * (countGbrOnMission() + 1);
+  const n = countGbrOnMission();
+  const table = CONFIG.gbrBase.callCostsByOnMission;
+  if (Array.isArray(table) && table.length) {
+    return table[Math.min(n, table.length - 1)];
+  }
+  return CONFIG.gbrBase.baseCallCost;
 }
 
 export function initGbrLogistics() {

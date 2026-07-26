@@ -812,11 +812,11 @@ assert(despawnLog, 'Despawn complete logged');
 // version check
 const { compareVersions, isNewerVersion, GAME_VERSION, hasPendingUpdate, _setRemoteVersionForTest } =
   await import('./js/systems/versionCheck.js');
-assert(GAME_VERSION === '0.4.3', 'GAME_VERSION 0.4.3');
-assert(compareVersions('0.4.3', '0.4.2.5') > 0, 'semver newer');
-assert(!isNewerVersion('0.4.3'), 'same version not newer');
-assert(isNewerVersion('0.4.4'), '0.4.4 is newer');
-_setRemoteVersionForTest({ version: '0.4.4', notes: ['Тест'] });
+assert(GAME_VERSION === '0.4.3.1', 'GAME_VERSION 0.4.3.1');
+assert(compareVersions('0.4.3.1', '0.4.3') > 0, 'semver newer');
+assert(!isNewerVersion('0.4.3.1'), 'same version not newer');
+assert(isNewerVersion('0.4.3.2'), '0.4.3.2 is newer');
+_setRemoteVersionForTest({ version: '0.4.3.2', notes: ['Тест'] });
 assert(hasPendingUpdate(), 'pending update detected');
 
 // v0.2.8 depot branch + reservoir HUD
@@ -888,7 +888,7 @@ assert(Game.time > 0, 'game advances after rAF frames');
 globalThis.window.requestAnimationFrame = prevRaf;
 
 const { GameVersion } = await import('./js/config/gameVersion.js');
-assert(GameVersion.version === '0.4.3', 'GameVersion is 0.4.3');
+assert(GameVersion.version === '0.4.3.1', 'GameVersion is 0.4.3.1');
 assert(GameVersion.changes.length <= 8, 'patch notes capped at 8 items');
 
 const { StationApi } = await import('./js/systems/stationApi.js');
@@ -1334,10 +1334,10 @@ const migrated = migrateSaveObject({ version: '0.2.11', depot: { level: 2, res: 
 assert(migrated.tankerTruck.level === 1, 'migration tanker level I');
 assert(migrated.fleet.level === 1, 'migration fleet level I');
 assert(migrated.depot.res <= migrated.depot.cap, 'migration clamps fuel');
-assert(isNewerVersion('0.4.4'), 'semver newer');
-assert(!isNewerVersion('0.4.3'), 'same version not newer');
+assert(isNewerVersion('0.4.3.2'), 'semver newer');
+assert(!isNewerVersion('0.4.3.1'), 'same version not newer');
 _resetVersionNotificationForTest();
-showVersionNotification('0.4.3');
+showVersionNotification('0.4.3.1');
 assert(true, 'version notification once per session');
 
 // v0.4.2.1 — аварийный обмен бонусов
@@ -1612,7 +1612,7 @@ Game.money = 5000;
 readyGbr();
 FD.callGBR();
 assert(countGbrOnMission() === 1, 'one GBR on mission');
-assert(gbrCallCost() === 10000, 'second call 10000 with one on mission');
+assert(gbrCallCost() === 5000, 'second call still 5000 with one on mission');
 assert(Game.gbr.unit.dispatchedCost === 5000, 'cost fixed at dispatch');
 Game.gbrBase.level = 6;
 assert(gbrPatrolSpeed() === 110, 'GBR speed 110 at base VI');
@@ -1719,6 +1719,74 @@ addSpeedBoostTime(15);
 assert(Game.speedBoost.remaining === 15, 'addSpeedBoostTime API');
 assert(CONFIG.gbr.returnSpeed === 60, 'return speed remains 60');
 assert(CONFIG.gbr.departCooldown === 5, 'departCooldown config 5');
+
+// v0.4.3.1 — экономика базы и таблица вызовов
+const { gbrDepartCooldownSeconds, notifyGbrReturning, gbrBaseUpgradeCost } =
+  await import('./js/systems/gbrLogistics.js');
+assert(JSON.stringify(CONFIG.gbrBase.upgradeCosts) ===
+  JSON.stringify([40000, 100000, 200000, 500000, 700000, 900000, 1500000, 2600000, 5000000]),
+  'GBR upgrade costs 0.4.3.1');
+assert(JSON.stringify(CONFIG.gbrBase.callCostsByOnMission) ===
+  JSON.stringify([5000, 5000, 5000, 6000, 7000, 8000, 10000, 12000, 15000, 20000]),
+  'GBR call cost table');
+FD.newGame('campaign', 1);
+Game.gbrBase.level = 1;
+assert(gbrBaseUpgradeCost() === 40000, 'I→II 40000');
+Game.gbrBase.level = 4;
+assert(gbrBaseUpgradeCost() === 500000, 'IV→V 500000');
+Game.gbrBase.level = 9;
+assert(gbrBaseUpgradeCost() === 5000000, 'IX→X 5M');
+Game.gbrBase.level = 10;
+assert(gbrBaseUpgradeCost() == null, 'X max no upgrade');
+
+const expectedCall = [5000, 5000, 5000, 6000, 7000, 8000, 10000, 12000, 15000, 20000];
+FD.newGame('campaign', 1);
+Game.gbrBase.level = 10;
+onGbrBaseLevelUp();
+for (let i = 0; i < 10; i++) {
+  Game.gbrLogistics.units[i].state = FleetState.READY;
+  Game.gbrLogistics.units[i].prepT = 0;
+}
+Game.gbrLogistics.departCd = 0;
+for (let onM = 0; onM < 10; onM++) {
+  assert(gbrCallCost() === expectedCall[onM], 'call cost at ' + onM + ' ON_MISSION');
+  const u = findReadyGbr();
+  attachVehicleToGbr(u, { fleetId: null });
+  Game.gbrLogistics.departCd = 0;
+}
+assert(countGbrOnMission() === 10, '10 on mission after table walk');
+// 3 ON_MISSION → 6000; after one RETURNING → 2 → 5000
+FD.newGame('campaign', 1);
+Game.gbrBase.level = 4;
+onGbrBaseLevelUp();
+for (const u of Game.gbrLogistics.units) {
+  u.state = FleetState.READY;
+  u.prepT = 0;
+}
+Game.gbrLogistics.departCd = 0;
+for (let i = 0; i < 3; i++) {
+  attachVehicleToGbr(findReadyGbr(), { fleetId: null });
+  Game.gbrLogistics.departCd = 0;
+}
+assert(countGbrOnMission() === 3 && gbrCallCost() === 6000, '3 ON_MISSION → 6000');
+notifyGbrReturning(1);
+assert(countGbrOnMission() === 2 && gbrCallCost() === 5000, 'after RETURNING → 5000');
+
+Game.gbrBase.level = 1;
+assert(gbrDepartCooldownSeconds() === 5, 'depart CD L1 = 5');
+Game.gbrBase.level = 4;
+assert(gbrDepartCooldownSeconds() === 5, 'depart CD L4 = 5');
+Game.gbrBase.level = 5;
+assert(gbrDepartCooldownSeconds() === 4, 'depart CD L5 = 4');
+Game.gbrBase.level = 7;
+assert(gbrDepartCooldownSeconds() === 4, 'depart CD L7 = 4');
+Game.gbrBase.level = 8;
+assert(gbrDepartCooldownSeconds() === 3, 'depart CD L8 = 3');
+Game.gbrBase.level = 9;
+assert(gbrDepartCooldownSeconds() === 3, 'depart CD L9 = 3');
+Game.gbrBase.level = 10;
+assert(gbrDepartCooldownSeconds() === 2, 'depart CD L10 = 2');
+assert(CONFIG.gbrBase.prepDuration === 20, 'prepDuration unchanged by depart CD upgrades');
 
 // v0.3.1.3 — бензовоз и правила ГБР
 const { primeLegTargeting } = await import('./js/systems/tankerSystem.js');
