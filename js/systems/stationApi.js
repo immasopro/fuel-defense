@@ -15,6 +15,7 @@ import { Road, approachStopS, apronPoseForRank, pocketEntryS, pocketPoseForRank 
 import { findFreePump } from '../world/map.js';
 
 import { setScalperPhase, ScalperPhase } from './entityFsm.js';
+import { restoreScalperToTour } from './scalperLifecycle.js';
 
 
 
@@ -121,6 +122,10 @@ function enqueuePocket(vehicle, slot) {
   vehicle.stopS = pocketEntryS(slot);
 
   vehicle.approachWait = 0;
+
+  vehicle.pocketApproachT = 0;
+
+  vehicle.pocketWaitT = 0;
 
   return true;
 
@@ -292,6 +297,18 @@ function processPocket(st, dt) {
           v.angry = true;
 
           v.scanT = 0.2;
+
+          v.targetSlot = null;
+
+          v.stopS = null;
+
+          v.pocketWaitT = 0;
+
+        } else if (v.kind === 'scalper') {
+
+          v.tourIdx = (v.tourIdx || 0) + 1;
+
+          restoreScalperToTour(v, 'pocket_wait_timeout');
 
         } else {
 
