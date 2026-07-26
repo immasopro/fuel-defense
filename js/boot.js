@@ -13,11 +13,42 @@ import { toggleDebugOverlay } from './debug/debugOverlay.js';
 import { initManualUi } from './ui/manual.js';
 import { initGameMenuUi } from './ui/gameMenu.js';
 import { initTankerOrderUi, openTankerOrderMenu } from './ui/tankerOrderMenu.js';
+import { initUpgradePaymentUi } from './ui/upgradePaymentMenu.js';
+import { initBonusAccountUi } from './ui/bonusAccountMenu.js';
 import { checkForUpdate, isNewerVersion } from './systems/versionCheck.js';
 import { showVersionNotification } from './ui/versionNotification.js';
 import { isEndlessUnlocked } from './systems/campaignSave.js';
 import { CAMPAIGN_LEVEL_COUNT } from './config/levels.js';
+import {
+  clearRunEconomy, consumeResumePending, markResumePending, tryRestoreRunEconomy, saveRunEconomy
+} from './systems/runEconomySave.js';
 let eventsBound = false;
+
+function isNativeApp() {
+  try {
+    const C = globalThis.Capacitor;
+    return !!(C && typeof C.isNativePlatform === 'function' && C.isNativePlatform());
+  } catch {
+    return false;
+  }
+}
+
+/** Нативный immersive fullscreen + скрытие браузерной кнопки ⛶ в APK. */
+async function applyNativeFullscreen() {
+  if (!isNativeApp()) return;
+  document.documentElement.classList.add('fd-native');
+  const btnFs = document.getElementById('btn-fs');
+  if (btnFs) btnFs.classList.add('hidden');
+  try {
+    const StatusBar = globalThis.Capacitor?.Plugins?.StatusBar;
+    if (StatusBar) {
+      if (StatusBar.setOverlaysWebView) await StatusBar.setOverlaysWebView({ overlay: true });
+      if (StatusBar.hide) await StatusBar.hide();
+    }
+  } catch {
+    /* native MainActivity already enforces immersive mode */
+  }
+}
 
 function destroy() {
   closePanel();
@@ -60,11 +91,14 @@ function bindEvents() {
     }
   });
   bindTap(document.getElementById('btn-menu'), () => showMenu());
-  bindTap(document.getElementById('btn-fs'), () => {
-    const el = document.documentElement;
-    if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen();
-    else if (document.exitFullscreen) document.exitFullscreen();
-  });
+  const btnFs = document.getElementById('btn-fs');
+  if (btnFs && !isNativeApp()) {
+    bindTap(btnFs, () => {
+      const el = document.documentElement;
+      if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen();
+      else if (document.exitFullscreen) document.exitFullscreen();
+    });
+  }
   bindTap(document.getElementById('btn-debug'), () => {
     const on = toggleDebugOverlay();
     const btn = document.getElementById('btn-debug');
@@ -76,6 +110,10 @@ function bindEvents() {
   initManualUi(bindTap);
   initGameMenuUi(bindTap);
   initTankerOrderUi();
+  initUpgradePaymentUi();
+  initBonusAccountUi(bindTap);
+  window.addEventListener('pagehide', () => markResumePending());
+  window.addEventListener('beforeunload', () => markResumePending());
 }
 
 function initDom() {
@@ -85,6 +123,7 @@ function initDom() {
   UI.panel = document.getElementById('panel');
   UI.warning = document.getElementById('warning');
   UI.statMoney = document.getElementById('stat-money');
+  UI.statBonuses = document.getElementById('stat-bonuses');
   UI.statTraffic = document.getElementById('stat-traffic');
   UI.statTime = document.getElementById('stat-time');
   UI.btnTanker = document.getElementById('btn-tanker');
@@ -113,6 +152,13 @@ function initDom() {
   resize();
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', () => setTimeout(resize, 150));
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', resize);
+    window.visualViewport.addEventListener('scroll', resize);
+  }
+  // Android: пересчёт после первого layout / смены density
+  requestAnimationFrame(() => resize());
+  setTimeout(resize, 300);
 
   let tStart = null;
   UI.cv.addEventListener('touchstart', e => {
@@ -132,22 +178,34 @@ function initDom() {
 export const Boot = {
   start(startFrame) {
     initDom();
+    applyNativeFullscreen();
     bindEvents();
     renderMenu();
     updateHUD();
     checkForUpdate().then(info => {
       if (info && isNewerVersion(info.version)) showVersionNotification(info.version);
     });
+    // После reload/закрытия APK — восстановить money/bonuses того же уровня
+    const resume = consumeResumePending();
+    if (resume && (resume.mode === 'campaign' || resume.mode === 'endless')) {
+      markVersionSeen();
+      if (UI.screenStart) UI.screenStart.classList.add('hidden');
+      Boot.startLevel(resume.mode, resume.levelIdx, { resumeEconomy: true });
+    }
     startFrame(0);
   },
 
-  startLevel(mode, levelIdx) {
+  startLevel(mode, levelIdx, opts) {
     destroy();
+    if (!opts?.resumeEconomy) clearRunEconomy();
     newGame(mode, levelIdx);
+    if (opts?.resumeEconomy) tryRestoreRunEconomy();
+    saveRunEconomy();
     updateHUD();
   },
 
   restart() {
+    clearRunEconomy();
     restartCurrentLevel();
   },
 

@@ -16,7 +16,7 @@ export const Game = {
   pursuitEventLog: [],
   scalper: { unit: null },
   scalperEvolution: null,
-  stats: { served: 0, earned: 0, liters: 0, stolenLiters: 0, stolenDamage: 0 },
+  stats: { served: 0, spawned: 0, earned: 0, liters: 0, stolenLiters: 0, stolenDamage: 0 },
   tankLabels: {},   // slot.i → seconds left showing "XXXX / YYYY л"
   depotLabel: 0,
   paused: false,

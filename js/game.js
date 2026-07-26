@@ -18,6 +18,7 @@ import { tickVersionCheck } from './systems/versionCheck.js';
 import { updateHUD } from './ui/hud.js';
 import { updatePanelLive, closePanel } from './ui/stationPanel.js';
 import { UI } from './ui/hud.js';
+import { clearRunEconomy, saveRunEconomy } from './systems/runEconomySave.js';
 
 export function newGame(mode, levelIdx) {
   Game.mode = mode;
@@ -48,7 +49,7 @@ export function newGame(mode, levelIdx) {
   resetPursuitState();
   resetScalperLifecycleState();
   Game.scalper = { unit: null };
-  Game.stats = { served: 0, earned: 0, liters: 0, stolenLiters: 0, stolenDamage: 0 };
+  Game.stats = { served: 0, spawned: 0, earned: 0, liters: 0, stolenLiters: 0, stolenDamage: 0 };
   Game.tankLabels = {};
   Game.depotLabel = 0;
   Game.bgSpawnTimer = 0;
@@ -68,7 +69,9 @@ export function restartCurrentLevel() {
   closePanel();
   if (UI.screenEnd) UI.screenEnd.classList.add('hidden');
   if (UI.warning) UI.warning.classList.add('hidden');
+  clearRunEconomy();
   newGame(mode, levelIdx);
+  saveRunEconomy();
   updateHUD();
 }
 
