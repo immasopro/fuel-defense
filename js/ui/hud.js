@@ -7,7 +7,10 @@ import { GameVersion } from '../config/gameVersion.js';
 import { innerLaneList, isLightGreen } from '../systems/trafficSystem.js';
 import { getServedHudText } from '../systems/spawnSystem.js';
 import { canDispatchTanker, tankerButtonSub } from '../systems/tankerLogistics.js';
-import { gbrButtonSub, gbrCallCost, canDispatchGbr } from '../systems/gbrLogistics.js';
+import { getGbrButtonState } from '../systems/gbrLogistics.js';
+import {
+  speedBoostLabel, canEnableSpeedBoost, isSpeedBoostActive
+} from '../systems/speedBoost.js';
 import { refreshTankerOrderQuote, isTankerOrderOpen } from './tankerOrderMenu.js';
 import { ensureBonusBalance } from '../systems/fuelOrderSystem.js';
 import {
@@ -132,15 +135,23 @@ function updateHUD() {
   if (tankerReady) UI.btnTanker.classList.add('tanker-ready');
   else UI.btnTanker.classList.remove('tanker-ready');
 
-  // ГБР — стоимость, READY или таймер подготовки
-  UI.gbrSub.textContent = gbrButtonSub(fmtRub);
-  const nextGbrCost = gbrCallCost();
-  if (Game.state !== 'play') {
-    UI.btnGbr.disabled = true;
-  } else if (canDispatchGbr() && Game.money < nextGbrCost) {
-    UI.btnGbr.disabled = true;
-  } else {
-    UI.btnGbr.disabled = false;
+  // ГБР — A/B/C/D: красная + цена при READY; серая «Рейд» / таймер иначе
+  const gbrSt = getGbrButtonState(fmtRub);
+  if (UI.gbrTitle) UI.gbrTitle.textContent = gbrSt.title;
+  UI.gbrSub.textContent = gbrSt.lines.length ? gbrSt.lines.join('\n') : '—';
+  const gbrAfford = gbrSt.cost == null || Game.money >= gbrSt.cost;
+  const gbrActive = Game.state === 'play' && gbrSt.canCall && gbrAfford;
+  UI.btnGbr.disabled = Game.state !== 'play' || !gbrSt.canCall || !gbrAfford;
+  if (gbrActive) UI.btnGbr.classList.add('gbr-ready');
+  else UI.btnGbr.classList.remove('gbr-ready');
+
+  // 2x ускорение — лимит реального времени на уровень
+  if (UI.btnSpeed) {
+    UI.btnSpeed.textContent = speedBoostLabel();
+    const boostOk = Game.state === 'play' && canEnableSpeedBoost();
+    UI.btnSpeed.disabled = !boostOk;
+    if (isSpeedBoostActive()) UI.btnSpeed.classList.add('speed-active');
+    else UI.btnSpeed.classList.remove('speed-active');
   }
 
   const Lt = Game.light;

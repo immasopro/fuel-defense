@@ -27,6 +27,15 @@ ES module live bindings resolve these at call time (no top-level circular init).
 5. **`holderBusy`** — module-level flag kept in `trafficSystem.js` per assignment.
 6. **Headless test** — uses `globalThis.__FD_HEADLESS__` to skip `boot()`; DOM is mocked minimally (no full canvas semantics).
 
+## Patch 0.4.3 — 2x speed boost + GBR multi-crew logistics
+
+- **2x** — HUD button; 60s real-time budget per level; pause does not consume; `addSpeedBoostTime(seconds)` for future ads (no SDK).
+- **GBR prep** — all crews prepare in parallel (`prepDuration` 20s); post-return prep is per-crew.
+- **Depart cooldown** — global 5s between dispatches (`gbr.departCooldown`).
+- **GBR button** — red + cost when a READY crew can depart; gray «Рейд» / prep / cooldown otherwise.
+- **Return speed** — verified `CONFIG.gbr.returnSpeed === 60` (unchanged); chase speeds untouched.
+- **APK** — rebuilt as v0.4.3.
+
 ## Patch 0.4.2.5 — Scalper end-of-level gate + QUEUE lifecycle fix
 
 - **Special spawn limit** — campaign: no new Scalper when `spawned >= target−10` (≤1000) or `target−20` (>1000). Existing Scalper finishes lifecycle.

@@ -812,11 +812,11 @@ assert(despawnLog, 'Despawn complete logged');
 // version check
 const { compareVersions, isNewerVersion, GAME_VERSION, hasPendingUpdate, _setRemoteVersionForTest } =
   await import('./js/systems/versionCheck.js');
-assert(GAME_VERSION === '0.4.2.5', 'GAME_VERSION 0.4.2.5');
-assert(compareVersions('0.4.2.5', '0.4.2.4') > 0, 'semver newer');
-assert(!isNewerVersion('0.4.2.5'), 'same version not newer');
-assert(isNewerVersion('0.4.3'), '0.4.3 is newer');
-_setRemoteVersionForTest({ version: '0.4.3', notes: ['Тест'] });
+assert(GAME_VERSION === '0.4.3', 'GAME_VERSION 0.4.3');
+assert(compareVersions('0.4.3', '0.4.2.5') > 0, 'semver newer');
+assert(!isNewerVersion('0.4.3'), 'same version not newer');
+assert(isNewerVersion('0.4.4'), '0.4.4 is newer');
+_setRemoteVersionForTest({ version: '0.4.4', notes: ['Тест'] });
 assert(hasPendingUpdate(), 'pending update detected');
 
 // v0.2.8 depot branch + reservoir HUD
@@ -888,7 +888,7 @@ assert(Game.time > 0, 'game advances after rAF frames');
 globalThis.window.requestAnimationFrame = prevRaf;
 
 const { GameVersion } = await import('./js/config/gameVersion.js');
-assert(GameVersion.version === '0.4.2.5', 'GameVersion is 0.4.2.5');
+assert(GameVersion.version === '0.4.3', 'GameVersion is 0.4.3');
 assert(GameVersion.changes.length <= 8, 'patch notes capped at 8 items');
 
 const { StationApi } = await import('./js/systems/stationApi.js');
@@ -1334,10 +1334,10 @@ const migrated = migrateSaveObject({ version: '0.2.11', depot: { level: 2, res: 
 assert(migrated.tankerTruck.level === 1, 'migration tanker level I');
 assert(migrated.fleet.level === 1, 'migration fleet level I');
 assert(migrated.depot.res <= migrated.depot.cap, 'migration clamps fuel');
-assert(isNewerVersion('0.4.3'), 'semver newer');
-assert(!isNewerVersion('0.4.2.5'), 'same version not newer');
+assert(isNewerVersion('0.4.4'), 'semver newer');
+assert(!isNewerVersion('0.4.3'), 'same version not newer');
 _resetVersionNotificationForTest();
-showVersionNotification('0.4.2.5');
+showVersionNotification('0.4.3');
 assert(true, 'version notification once per session');
 
 // v0.4.2.1 — аварийный обмен бонусов
@@ -1600,8 +1600,11 @@ const { currentScalperMaxLiters, scalperEvolutionTier, checkScalperEvolutionThre
 
 FD.newGame('campaign', 1);
 assert(Game.gbrLogistics.units[0].state === 'PREPARING', 'GBR starts preparing');
+assert(CONFIG.gbrBase.prepDuration === 20, 'GBR prep 20s');
 tickGbrLogistics(10);
-assert(findReadyGbr(), 'GBR ready after 10s');
+assert(!findReadyGbr(), 'GBR not ready at 10s');
+tickGbrLogistics(10);
+assert(findReadyGbr(), 'GBR ready after 20s');
 assert(gbrCallCost() === 5000, 'first GBR call 5000');
 FD.actionBuildStation(Road.slots[0], 'a92');
 Game.scalper.unit = FD.makeScalper();
@@ -1628,18 +1631,23 @@ assert(Game.scalperEvolution.notifiedTier === 1, 'evolution notified once');
 checkScalperEvolutionThreshold();
 assert(Game.scalperEvolution.notifiedTier === 1, 'no duplicate notification');
 
-// v0.3.1.2 — компактная кнопка ГБР и панель автопарка
-const { gbrButtonSub, gbrFleetPanelLines, nearestGbrPrepSeconds, onGbrMissionComplete } =
+// v0.3.1.2 / v0.4.3 — кнопка ГБР и панель автопарка
+const { gbrButtonSub, gbrFleetPanelLines, nearestGbrPrepSeconds, onGbrMissionComplete, getGbrButtonState,
+  canDispatchGbr, attachVehicleToGbr, onGbrBaseLevelUp } =
   await import('./js/systems/gbrLogistics.js');
 
 FD.newGame('campaign', 1);
 let gbrSub = gbrButtonSub(n => n + ' ₽');
-assert(gbrSub.includes('5000'), 'GBR button shows cost');
-assert(gbrSub.includes('Подготовка'), 'GBR button shows prep timer at start');
+assert(!gbrSub.includes('5000'), 'GBR button hides payable cost while preparing');
+assert(gbrSub.includes('с'), 'GBR button shows prep seconds at start');
 assert(!gbrSub.includes('№2'), 'GBR button has no fleet list');
-tickGbrLogistics(10);
+let gbrUi = getGbrButtonState(n => n + ' ₽');
+assert(gbrUi.reason === 'prep' && !gbrUi.red, 'GBR UI prep state gray');
+tickGbrLogistics(20);
 gbrSub = gbrButtonSub(n => n + ' ₽');
-assert(gbrSub.includes('READY'), 'GBR button shows READY after prep');
+assert(gbrSub.includes('5000'), 'GBR button shows cost when READY');
+gbrUi = getGbrButtonState(n => n + ' ₽');
+assert(gbrUi.reason === 'ready' && gbrUi.red && gbrUi.canCall, 'GBR UI ready red');
 assert(nearestGbrPrepSeconds() == null, 'no GBR prep timer when ready');
 const fleetLines = gbrFleetPanelLines();
 assert(fleetLines.length === 10, 'GBR panel lists 10 slots');
@@ -1650,8 +1658,67 @@ Game.gbrLogistics.units[0].state = FleetState.ON_MISSION;
 Game.gbrLogistics.prepSlot = null;
 onGbrMissionComplete(1);
 assert(Game.gbrLogistics.units[0].state === FleetState.PREPARING, 'GBR prep restarts after return');
-tickGbrLogistics(10);
+assert(Game.gbrLogistics.units[0].prepT === 20, 'post-raid prep 20s');
+tickGbrLogistics(20);
 assert(findReadyGbr(), 'GBR ready again after full cycle');
+
+// v0.4.3 — параллельная подготовка + depart cooldown + speed boost
+Game.gbrBase.level = 3;
+onGbrBaseLevelUp();
+assert(Game.gbrLogistics.units.length === 3, '3 GBR units at base L3');
+for (const u of Game.gbrLogistics.units) {
+  u.state = FleetState.PREPARING;
+  u.prepT = 20;
+  u.vehicle = null;
+}
+Game.gbrLogistics.departCd = 0;
+tickGbrLogistics(20);
+assert(Game.gbrLogistics.units.every(u => u.state === FleetState.READY), 'all 3 READY in parallel');
+Game.money = 999999;
+const u1 = findReadyGbr();
+attachVehicleToGbr(u1, { fleetId: null });
+assert(Game.gbrLogistics.departCd === 5, 'depart cooldown 5s after dispatch');
+assert(!canDispatchGbr(), 'cannot dispatch during depart CD');
+gbrUi = getGbrButtonState(n => n + ' ₽');
+assert(gbrUi.reason === 'cooldown', 'UI shows depart cooldown');
+tickGbrLogistics(5);
+assert(canDispatchGbr(), 'can dispatch after depart CD');
+const u2 = findReadyGbr();
+attachVehicleToGbr(u2, { fleetId: null });
+tickGbrLogistics(5);
+const u3 = findReadyGbr();
+attachVehicleToGbr(u3, { fleetId: null });
+assert(countGbrOnMission() === 3, 'three sequential dispatches');
+onGbrMissionComplete(1);
+assert(Game.gbrLogistics.units[0].prepT === 20, 'unit1 prep 20');
+tickGbrLogistics(5);
+onGbrMissionComplete(2);
+assert(Math.abs(Game.gbrLogistics.units[0].prepT - 15) < 0.01, 'unit1 prep independent 15 left');
+assert(Game.gbrLogistics.units[1].prepT === 20, 'unit2 prep fresh 20');
+gbrUi = getGbrButtonState(n => n + ' ₽');
+assert(gbrUi.reason === 'prep' && gbrUi.lines[0].includes('15'), 'UI shows nearest prep 15s');
+
+const {
+  toggleSpeedBoost, tickSpeedBoost, addSpeedBoostTime, speedBoostLabel, isSpeedBoostActive
+} = await import('./js/systems/speedBoost.js');
+FD.newGame('campaign', 1);
+assert(Game.timeScale === 1 && Game.speedBoost.remaining === 60, 'speed boost reset on level');
+assert(speedBoostLabel() === '2x 0:60', 'boost label 0:60');
+assert(toggleSpeedBoost() && isSpeedBoostActive(), '2x on');
+tickSpeedBoost(20);
+assert(Math.abs(Game.speedBoost.remaining - 40) < 0.01, '20s real used');
+toggleSpeedBoost();
+assert(Game.timeScale === 1, '2x off');
+tickSpeedBoost(10);
+assert(Math.abs(Game.speedBoost.remaining - 40) < 0.01, 'off does not spend');
+toggleSpeedBoost();
+tickSpeedBoost(40);
+assert(Game.speedBoost.remaining === 0 && Game.timeScale === 1, 'auto 1x when depleted');
+assert(!toggleSpeedBoost(), 'cannot re-enable without time');
+addSpeedBoostTime(15);
+assert(Game.speedBoost.remaining === 15, 'addSpeedBoostTime API');
+assert(CONFIG.gbr.returnSpeed === 60, 'return speed remains 60');
+assert(CONFIG.gbr.departCooldown === 5, 'departCooldown config 5');
 
 // v0.3.1.3 — бензовоз и правила ГБР
 const { primeLegTargeting } = await import('./js/systems/tankerSystem.js');

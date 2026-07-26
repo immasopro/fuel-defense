@@ -11,6 +11,7 @@ import { distributeDepotFuel } from './stations/reservoir.js';
 import { tickSpecialSpawns, updateVehicles, postStationMaintenance } from './systems/stationSystem.js';
 import { initLogistics, tickTankerLogistics } from './systems/tankerLogistics.js';
 import { initGbrLogistics, tickGbrLogistics } from './systems/gbrLogistics.js';
+import { initSpeedBoost } from './systems/speedBoost.js';
 import { initScalperEvolution } from './systems/scalperEvolution.js';
 import { resetPursuitState, tickGbrPursuit } from './systems/gbrPursuit.js';
 import { resetScalperLifecycleState } from './systems/scalperLifecycle.js';
@@ -28,6 +29,7 @@ export function newGame(mode, levelIdx) {
   Game.money = Game.modeCfg.startMoney;
   Game.bonuses = 0;
   Game.time = 0;
+  initSpeedBoost();
   Game.depot = { level: 1, res: CONFIG.depot.levels[0], cap: CONFIG.depot.levels[0] };
   Game.vehicles = [];
   Game.holder = [];

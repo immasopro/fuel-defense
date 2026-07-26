@@ -156,6 +156,8 @@ export const balance = {
     patrolMaxLaps: 5,
     chaseFollowDist: 14,
     arrestDist: 22,
+    /** Глобальный cooldown между фактическими выездами экипажей (v0.4.3) */
+    departCooldown: 5,
     /** Приоритетное движение только в CHASE */
     chaseDrive: {
       gapMin: 1.5,
@@ -168,7 +170,8 @@ export const balance = {
 
   gbrBase: {
     baseCallCost: 5000,
-    prepDuration: 10,
+    /** Первичная и пост-рейд подготовка каждого экипажа (параллельно) */
+    prepDuration: 20,
     speeds: [100, 100, 100, 100, 100, 110, 120, 130, 140, 150],
     upgradeCosts: [50000, 125000, 250000, 500000, 1250000, 2500000, 5000000, 10000000, 20000000]
   },

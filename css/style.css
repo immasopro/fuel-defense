@@ -68,8 +68,13 @@ html,body{height:100%;width:100%;overflow:hidden;position:fixed;background:#161b
 .act-btn .sub{font-size:var(--fs-btn-sub);font-weight:600;opacity:.9;white-space:pre-line;line-height:1.25}
 .act-btn:active{transform:scale(.96);filter:brightness(1.25)}
 .act-btn:disabled{background:#333a45;color:#8b949e;transform:none;filter:none}
-#btn-gbr{background:#c62828}
+#btn-gbr{background:#333a45}
+#btn-gbr.gbr-ready{background:#c62828;color:#fff}
+#btn-gbr:disabled{background:#333a45;color:#8b949e}
 #btn-tanker.tanker-ready{background:#c62828}
+#btn-speed{background:#333a45;flex:0.72;min-width:4.2em}
+#btn-speed.speed-active{background:#1565c0;color:#fff}
+#btn-speed:disabled{background:#333a45;color:#8b949e}
 #btn-light{background:#2e7d32}
 #btn-light.red-mode{background:#c62828}
 #btn-fs,#btn-debug,#btn-menu-hud,#btn-help{

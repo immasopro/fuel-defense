@@ -8,6 +8,7 @@ import { closePanel } from './ui/stationPanel.js';
 import { newGame, restartCurrentLevel } from './game.js';
 import { CONFIG } from './config/index.js';
 import { callGBR } from './systems/spawnSystem.js';
+import { toggleSpeedBoost } from './systems/speedBoost.js';
 import { toggleTrafficLight } from './systems/trafficSystem.js';
 import { toggleDebugOverlay } from './debug/debugOverlay.js';
 import { initManualUi } from './ui/manual.js';
@@ -66,6 +67,7 @@ function bindEvents() {
   });
   bindTap(UI.btnTanker, () => openTankerOrderMenu());
   bindLongTap(UI.btnGbr, () => callGBR(), () => openGbrBasePanel());
+  if (UI.btnSpeed) bindTap(UI.btnSpeed, () => toggleSpeedBoost());
   bindTap(UI.btnLight, () => toggleTrafficLight());
   bindTap(UI.levelRow, e => {
     const b = e.target.closest ? e.target.closest('[data-lvl]') : null;
@@ -128,8 +130,10 @@ function initDom() {
   UI.statTime = document.getElementById('stat-time');
   UI.btnTanker = document.getElementById('btn-tanker');
   UI.btnGbr = document.getElementById('btn-gbr');
+  UI.btnSpeed = document.getElementById('btn-speed');
   UI.btnLight = document.getElementById('btn-light');
   UI.tankerSub = UI.btnTanker.querySelector('.sub');
+  UI.gbrTitle = UI.btnGbr.querySelector('.t');
   UI.gbrSub = UI.btnGbr.querySelector('.sub');
   UI.lightSub = document.getElementById('light-sub');
   UI.screenStart = document.getElementById('screen-start');

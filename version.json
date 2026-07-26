@@ -1,5 +1,5 @@
 {
-  "version": "0.4.2.5",
+  "version": "0.4.3",
   "notes": [
     "Scalper spawn blocked in last 10/20 cars of campaign level",
     "Fix stuck QUEUE/OWNER:STATION after missed pocket",
