@@ -1,7 +1,9 @@
 {
-  "version": "0.4.1",
+  "version": "0.4.3.3",
   "notes": [
-    "Flexible tanker fuel order + bonus cashback",
-    "Start money 50000"
+    "Level progress by spawnedCars (includes Scalper)",
+    "DRAINING phase then win when map empty",
+    "Removed Scalper end-of-level special reserve",
+    "Fuel crisis 8s warning timer"
   ]
 }

@@ -1,4 +1,4 @@
-/** Меню заказа бензовоза — не ставит игру на паузу (v0.4.1) */
+/** Меню заказа бензовоза — не ставит игру на паузу (v0.4.1); кредит v0.4.2.2 */
 
 import { Game } from '../core/gameState.js';
 import { fmtRub } from '../core/currency.js';
@@ -20,6 +20,8 @@ function ensureEls() {
     liters: document.getElementById('tanker-order-liters'),
     price: document.getElementById('tanker-order-price'),
     cost: document.getElementById('tanker-order-cost'),
+    balance: document.getElementById('tanker-order-balance'),
+    after: document.getElementById('tanker-order-after'),
     cashback: document.getElementById('tanker-order-cashback'),
     bonuses: document.getElementById('tanker-order-bonuses'),
     err: document.getElementById('tanker-order-error'),
@@ -27,6 +29,13 @@ function ensureEls() {
     close: document.getElementById('tanker-order-close')
   };
   return els;
+}
+
+/** Баланс с явным минусом при задолженности (без дублирования кредитной формулы). */
+function fmtMoneyLine(n) {
+  const v = Math.round(n);
+  if (v < 0) return '−' + fmtRub(Math.abs(v));
+  return fmtRub(v);
 }
 
 function hideError() {
@@ -48,13 +57,30 @@ export function refreshTankerOrderQuote() {
   const e = ensureEls();
   if (!e.root || e.root.classList.contains('hidden')) return;
   const q = quoteFuelOrder(orderPercent);
+  const bal = Game.money;
+  const after = bal - q.cost;
+  const ok = canAffordFuelOrder(q);
   if (e.pct) e.pct.textContent = q.percent + '%';
   if (e.liters) e.liters.textContent = q.liters + ' л';
   if (e.price) e.price.textContent = q.pricePerLiter + ' ₽/л';
   if (e.cost) e.cost.textContent = fmtRub(q.cost);
+  if (e.balance) e.balance.textContent = fmtMoneyLine(bal);
+  if (e.after) {
+    e.after.textContent = fmtMoneyLine(after);
+    e.after.classList.toggle('tanker-order-debt', after < 0);
+  }
   if (e.cashback) e.cashback.textContent = q.cashbackPct + '%';
-  if (e.bonuses) e.bonuses.textContent = fmtRub(q.bonuses).replace('₽', '').trim() + ' бонусов';
+  if (e.bonuses) e.bonuses.textContent = '+' + Math.round(q.bonuses).toLocaleString('ru-RU');
   if (e.slider && +e.slider.value !== q.percent) e.slider.value = String(q.percent);
+  if (e.confirm) {
+    e.confirm.disabled = !ok || !canDispatchTanker();
+    e.confirm.classList.toggle('is-disabled', e.confirm.disabled);
+  }
+  if (!ok) {
+    showError('Превышен лимит задолженности');
+  } else {
+    hideError();
+  }
 }
 
 export function isTankerOrderOpen() {
@@ -91,7 +117,7 @@ export function confirmTankerOrder() {
     return false;
   }
   if (!canAffordFuelOrder(q)) {
-    showError('Недостаточно средств для закупки');
+    showError('Превышен лимит задолженности');
     return false;
   }
   const ok = callTanker({

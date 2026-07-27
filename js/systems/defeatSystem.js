@@ -2,8 +2,10 @@ import { CONFIG } from '../config/index.js';
 import { Game } from '../core/gameState.js';
 import { fmtTime } from '../core/utils.js';
 import { fmtRub } from '../core/currency.js';
-import { getTargetCars, hasLevelTarget } from './spawnSystem.js';
-import { quoteFuelOrder } from './fuelOrderSystem.js';
+import {
+  getTargetCars, hasLevelTarget, getSpawnedCars, countVehiclesOnMap, isLevelTrafficVehicle
+} from './spawnSystem.js';
+import { quoteFuelOrder, canAffordFuelOrder } from './fuelOrderSystem.js';
 import { hasActiveTankerDelivery, hasReadyTanker } from './tankerLogistics.js';
 import { sortedStationSlots } from '../world/map.js';
 import { innerLaneList, spawnClear, isLightGreen } from './trafficSystem.js';
@@ -14,21 +16,37 @@ import {
   tryUpdateEndlessBest, getEndlessBest
 } from './campaignSave.js';
 import { CAMPAIGN_LEVEL_COUNT } from '../config/levels.js';
+import { isScalperLeavingMap } from './scalperLifecycle.js';
 
+function clientNeedsService(v) {
+  if (!isLevelTrafficVehicle(v)) return false;
+  if (v.kind === 'car') return !v.served;
+  if (v.kind === 'scalper' || v.isScalper) {
+    if (isScalperLeavingMap(v)) return false;
+    return true;
+  }
+  if (v.kind === 'corporate') return !v.served;
+  return false;
+}
+
+/** Есть трафик, которому ещё нужно обслуживание / топливо. */
 function hasWaitingClients() {
   if (hasLevelTarget()) {
     const target = getTargetCars();
-    if (target != null && Game.stats.served < target) return true;
+    // Пока бюджет не исчерпан — ещё будут клиенты.
+    if (target != null && getSpawnedCars() < target) return true;
   } else {
     return true;
   }
-  for (const v of Game.holder) {
-    if (v.kind === 'car' && !v.served) return true;
+  for (const v of Game.holder || []) {
+    if (clientNeedsService(v)) return true;
   }
-  for (const v of Game.vehicles) {
-    if (v.kind === 'car' && !v.served) return true;
+  if (Game.holderPriorityWait && clientNeedsService(Game.holderPriorityWait)) return true;
+  for (const v of Game.vehicles || []) {
+    if (clientNeedsService(v)) return true;
   }
   if (Game.prepared && !Game.prepared.ready) return true;
+  if (Game.prepared?.vehicle && clientNeedsService(Game.prepared.vehicle)) return true;
   return false;
 }
 
@@ -46,8 +64,7 @@ function isTankerCreditBlocked() {
   if (hasActiveTankerDelivery()) return false;
   if (!sortedStationSlots().length) return true;
   const minQuote = quoteFuelOrder(20);
-  // v0.4.1: заказ через меню требует деньги ≥ стоимости (без кредита)
-  const cannotPay = Game.money < minQuote.cost;
+  const cannotPay = !canAffordFuelOrder(minQuote);
   if (hasReadyTanker()) return cannotPay;
   const hasQueued = Game.logistics?.trucks.some(t =>
     t.state === 'PREPARING' || t.state === 'WAIT_PREPARING');
@@ -55,13 +72,29 @@ function isTankerCreditBlocked() {
   return cannotPay;
 }
 
-function checkFuelCrisis() {
+function isFuelCrisisCondition() {
+  if (hasActiveTankerDelivery()) return false;
+  return hasWaitingClients() && isFuelExhausted() && isTankerCreditBlocked();
+}
+
+/**
+ * Топливный кризис с таймером (v0.4.3.3).
+ * @returns {boolean} true если уровень завершён поражением
+ */
+function checkFuelCrisis(dt) {
   if (Game.state !== 'play') return false;
-  if (!hasWaitingClients()) return false;
-  if (!isFuelExhausted()) return false;
-  if (!isTankerCreditBlocked()) return false;
-  endGame(false, 'fuel_crisis');
-  return true;
+  if (!isFuelCrisisCondition()) {
+    Game.fuelCrisisT = 0;
+    return false;
+  }
+  const step = dt > 0 ? dt : 0;
+  Game.fuelCrisisT = (Game.fuelCrisisT || 0) + step;
+  const limit = CONFIG.fuelCrisisTime ?? 8;
+  if (Game.fuelCrisisT >= limit) {
+    endGame(false, 'fuel_crisis');
+    return true;
+  }
+  return false;
 }
 
 function updateDefeatTimer(dt) {
@@ -75,18 +108,36 @@ function updateDefeatTimer(dt) {
   return false;
 }
 
+/**
+ * Завершение кампании: spawned >= target и клиентский трафик = 0.
+ * @returns {boolean}
+ */
+function checkLevelComplete() {
+  if (Game.state !== 'play') return false;
+  if (Game.mode !== 'campaign') return false;
+  const target = getTargetCars();
+  if (target == null) return false;
+  if (getSpawnedCars() < target) return false;
+  if (countVehiclesOnMap() > 0) return false;
+  if (Game.money < 0) endGame(false, 'bankruptcy');
+  else endGame(true);
+  return true;
+}
+
 function formatServedLine() {
   if (Game.mode === 'endless') {
     return '⛽ Обслужено машин: <b>' + Game.stats.served + '</b>';
   }
   const target = getTargetCars();
-  return '⛽ Обслужено машин: <b>' + Game.stats.served + ' / ' + target + '</b>';
+  return '🚦 Поток: <b>' + getSpawnedCars() + ' / ' + target + '</b><br>' +
+    '⛽ Обслужено: <b>' + Game.stats.served + '</b>';
 }
 
 function endGame(win, reason) {
   const defeatReason = reason || (win ? 'win' : 'traffic');
   Game.state = win ? 'win' : 'over';
   Game.defeatReason = defeatReason;
+  Game.fuelCrisisT = 0;
   closePanel();
   UI.warning.classList.add('hidden');
   const target = getTargetCars();
@@ -101,7 +152,7 @@ function endGame(win, reason) {
   } else if (defeatReason === 'fuel_crisis') {
     UI.endTitle.textContent = '💥 ИГРА ОКОНЧЕНА';
     UI.endTitle.style.color = '#ef5350';
-    UI.endDesc.textContent = 'Вы не смогли заправить все автомобили.';
+    UI.endDesc.textContent = 'Недостаточно топлива для завершения уровня.';
     if (UI.btnRestart) UI.btnRestart.textContent = 'Начать заново';
     if (UI.btnMenu) UI.btnMenu.textContent = 'Главное меню';
   } else if (Game.mode === 'endless' && !win) {
@@ -128,7 +179,7 @@ function endGame(win, reason) {
     UI.endTitle.textContent = win ? '🏆 ПОБЕДА!' : '💥 ИГРА ОКОНЧЕНА';
     UI.endTitle.style.color = win ? '#8bc34a' : '#ef5350';
     UI.endDesc.textContent = win
-      ? ('Уровень ' + Game.levelIdx + ' пройден — обслужено ' + target + ' машин!')
+      ? ('Уровень ' + Game.levelIdx + ' пройден — поток ' + target + ' машин завершён!')
       : ('Накопитель переполнен, и въезд остался заблокирован ' + CONFIG.defeatTime +
         ' секунд.');
   }
@@ -164,6 +215,7 @@ function endGame(win, reason) {
 }
 
 export {
-  updateDefeatTimer, endGame, checkFuelCrisis,
-  hasWaitingClients, isFuelExhausted, isTankerCreditBlocked
+  updateDefeatTimer, endGame, checkFuelCrisis, checkLevelComplete,
+  hasWaitingClients, isFuelExhausted, isTankerCreditBlocked, isFuelCrisisCondition,
+  countVehiclesOnMap
 };

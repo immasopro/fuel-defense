@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Fuel Defense</string>
+    <string name="title_activity_main">Fuel Defense</string>
+    <string name="package_name">com.immasopro.fueldefense</string>
+    <string name="custom_url_scheme">com.immasopro.fueldefense</string>
+</resources>
