@@ -2,7 +2,7 @@
 
 Status: **audit complete (read-only, no product fix)**  
 Repro: `node scripts/qa-audit-0432-spawn-endgame.mjs`  
-Branch tip: `cursor/hotfix-0432-gbr-return-teleport-adc7` (v0.4.3.2)
+Version: **0.4.3.2**
 
 ## Snapshot fields
 
@@ -19,8 +19,8 @@ Branch tip: `cursor/hotfix-0432-gbr-return-teleport-adc7` (v0.4.3.2)
 
 ## Уровень 1 (`targetCars = 100`, Scalper limit = 90)
 
-| Момент | target | spawned | served | onMap | regular spawn | Scalper spawn | state |
-|--------|-------:|--------:|-------:|------:|:-------------:|:-------------:|-------|
+| Момент | target | spawned | served | onMap | regular | Scalper | state |
+|--------|-------:|--------:|-------:|------:|:-------:|:-------:|-------|
 | Старт | 100 | 0 | 0 | 0 | ✓ | ✓ | play |
 | Спавн остановлен (бюджет) | 100 | 100 | 0 | 100 | ✗ | ✗ | play |
 | 90/100 | 100 | 90 | 90 | 0 | ✓ | ✗ | play |
@@ -42,10 +42,9 @@ Branch tip: `cursor/hotfix-0432-gbr-return-teleport-adc7` (v0.4.3.2)
 | Scalper среди «последних» (`spawned=269`) | спавнится; `spawned` остаётся 269 |
 | Scalper при `spawned=270` | не создаётся |
 | Уже существующий Scalper при `spawned≥270` | **остаётся** на карте, доживает lifecycle |
-| После despawn / поимки GBR / ухода с карты при `spawned≥270` | новый Scalper **не** появляется |
+| После despawn / ухода с карты при `spawned≥270` | новый Scalper **не** появляется |
+| **Пойман GBR** при `spawned≥270` | `spawned`/`served` не меняются; новый Scalper **не** появляется |
 | Несколько Scalper подряд (`spawned=50`) | ок: одновременно только один (`Game.scalper.unit`), после despawn — следующий |
-
-GBR-поимка не меняет `spawned`/`served` и не снимает endgate.
 
 ---
 
@@ -70,26 +69,31 @@ GBR-поимка не меняет `spawned`/`served` и не снимает end
 
 ## Топливный кризис
 
-Триггер (`checkFuelCrisis`):
+Триггер (`checkFuelCrisis` в `defeatSystem.js`):
 
 1. `hasWaitingClients()` — в кампании: `served < target` **или** есть незаправленный `car` в holder/vehicles  
 2. `isFuelExhausted()` — depot + все станции ≈ 0  
-3. `isTankerCreditBlocked()` — нельзя оплатить минимальный заказ 20% (`canAffordFuelOrder`)
+3. `isTankerCreditBlocked()` — нельзя оплатить минимальный заказ **20%** (`canAffordFuelOrder`)
 
-Кредит (`canOrderTanker`): `money - cost >= -cost` ⟺ **`money >= 0`**.  
-То есть заказ в долг возможен с нулевого/положительного баланса (уход в минус на сумму заказа); при **уже отрицательном** балансе заказ блокируется.
+Кредит (`canOrderTanker` / `canAffordFuelOrder`):  
+`money - cost >= -cost` ⟺ **`money >= 0`**.
+
+Заказ в долг возможен с нуля/плюса (баланс уходит в минус на сумму заказа).  
+При **уже отрицательном** балансе заказ блокируется → при пустом топливе и waiting clients срабатывает кризис.
 
 | Сценарий | Кризис? |
 |----------|---------|
 | Топливо пусто, танкер READY, money &gt; 0 | нет |
-| Топливо пусто, READY, money &lt; 0 | **да** |
+| Топливо пусто, READY, money = 0 (кредит разрешён) | нет |
+| Топливо пусто, READY, money = −1 | **да** |
+| Топливо пусто, READY, money = −80k | **да** |
+| Топливо пусто, танкер PREPARING, money &gt; 0 | нет |
 | Топливо пусто, танкер PREPARING, money &lt; 0 | **да** |
 | Топливо пусто, served≥target, нет waiting cars | нет |
 | На нефтебазе есть топливо | нет |
 | Несколько типов топлива на карте, всё пусто, money &lt; 0 | **да** |
-| Нет грузовиков в logistics, пусто, waiting, money &lt; 0 | **да** |
 
-«Минимальный бензовоз недоступен» (PREPARING) при невозможности оплаты **не спасает** от кризиса — `isTankerCreditBlocked` всё равно true, если нельзя оплатить min quote.
+«Минимальный бензовоз недоступен» (PREPARING) **сам по себе** кризиса не даёт, если кредит ещё разрешён (`money >= 0`).
 
 ---
 
@@ -111,4 +115,4 @@ GBR-поимка не меняет `spawned`/`served` и не снимает end
 1. Бюджет обычных машин и endgate Scalper работают как в 0.4.2.5.  
 2. На L1 «последние 10» — зона без нового Scalper при продолжении обычного спавна.  
 3. Win срабатывает по `served`, мгновенно, с машинами на карте.  
-4. Кризис топлива завязан на `money >= 0` для возможности заказа, а не на отдельный «лимит −70k» как абстракцию для UI.
+4. Кризис топлива фактически завязан на **`money >= 0`** для возможности минимального заказа 20%, а не на отдельный UI-лимит −70k как единственный порог.
