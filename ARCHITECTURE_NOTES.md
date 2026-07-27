@@ -35,6 +35,12 @@ ES module live bindings resolve these at call time (no top-level circular init).
 - **Fuel crisis** — 8s timer + warning «Недостаточно топлива…»; cancelled when tanker ordered.
 - **APK** — rebuilt as v0.4.3.3.
 
+## QA 0.4.3.3 — Collision / dimensions audit (no code fix)
+
+- **Doc** — `docs/QA_0433_COLLISION_AUDIT.md`; script `scripts/qa-audit-0433-collisions.mjs`.
+- **Architecture** — no AABB; 1D bumper follow + soft-snap; GBR↔Scalper catch is Euclidean `arrestDist`.
+- **CRITICAL** — COLL-001 `findForwardLeader` loses leader at `gap≤0` → tunnel through stopped cars; COLL-002 chase overtake disables soft-fix into civilians.
+
 ## Patch 0.4.3.2 — GBR RETURNING no Euclidean teleport
 
 - **Bug** — after catch just past base, `dp < 40` completed RETURNING while `ringAhead ≈ L` (visual teleport).

@@ -170,12 +170,12 @@ EXITING stall-jump: до `max(step*2, dist*0.35)` ≈ 35+ за tick (&gt; `scalp
 | Условие | overlap events | max depth |
 |---------|----------------|-----------|
 | 12 cars, dt=1/60 | 0 | 0 |
-| 12 cars, dt=0.05 (clamp max) | **36** | **15.97** |
-| dt=0.2 (bypass clamp) | 0* | 0* |
+| 12 cars, dt=0.05 (clamp max) | **0…42** (флаки) | **0…21** |
+| dt=0.2 (bypass clamp) | зависит от сценария | — |
 
-\*Результат при dt=0.2 нестабилен/зависит от сценария; clamp в проде = 0.05.
+Плотный прогон **недетерминирован** (random `makeCar` types/speeds + overtake chance): на части сидов overlaps=0, на других depth≈16–21 при том же dt=0.05.
 
-**FAIL FPS-01:** корректность зависит от размера tick внутри clamp — при низком FPS (крупный dt) плотный поток даёт глубокие overlap (COLL-001 + overtake).
+**FAIL FPS-01 / COLL-005:** при крупном dt (низкий FPS → clamp 0.05) выше шанс проявления COLL-001 и overtake s-overlap; при 60 FPS чаще «держит».
 
 ---
 
