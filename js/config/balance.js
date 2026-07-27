@@ -1,6 +1,8 @@
 /** Numeric balance parameters — все суммы в рублях (₽) */
 export const balance = {
   defeatTime: 10,
+  /** Таймер поражения при невозможности заказать топливо (v0.4.3.3) */
+  fuelCrisisTime: 8,
   truckUnlockAt: 30,
   giveUpLaps: 2,
   needMin: 0.65,

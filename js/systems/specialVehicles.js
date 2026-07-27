@@ -5,7 +5,7 @@ import { GBRBase } from '../world/map.js';
 import { mod, rand } from '../core/utils.js';
 import { makeScalper, makeBgCar } from '../vehicles/vehicleFactory.js';
 import { finishScalperFuel, addFloat, forfeitScalperTheft } from './economySystem.js';
-import { currentSpawnInterval, scalperCooldown, canSpawnScalper } from './spawnSystem.js';
+import { currentSpawnInterval, scalperCooldown, canSpawnScalper, registerSpawnedCar } from './spawnSystem.js';
 import { onHolderChanged, addToHolder } from './trafficSystem.js';
 import { sortedStationSlots } from '../world/map.js';
 import { StationApi } from './stationApi.js';
@@ -763,8 +763,7 @@ function tickSpecialSpawns(dt) {
 
   if (Game.scalperTimer <= 0 && !Game.scalper.unit) {
 
-    // v0.4.2.5: после specialSpawnLimit новые Scalper не создаются;
-    // уже существующий на карте не трогаем.
+    // v0.4.3.3: Scalper занимает общий бюджет spawned; после target — не создаём.
     if (sortedStationSlots().length && canSpawnScalper()) {
 
       const sc = makeScalper();
@@ -774,6 +773,7 @@ function tickSpecialSpawns(dt) {
       addToHolder(sc, { priority: false, countsForDefeat: false });
 
       Game.scalper.unit = sc;
+      registerSpawnedCar();
 
       setScalperPhase(sc, ScalperPhase.DRIVING);
 

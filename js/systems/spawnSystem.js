@@ -20,6 +20,12 @@ import {
 import { manualCallGbr } from './gbrPursuit.js';
 import { saveRunEconomy } from './runEconomySave.js';
 
+/** Фазы кампании: SPAWNING → DRAINING → RESULT (win/over). */
+const LevelPhase = {
+  SPAWNING: 'SPAWNING',
+  DRAINING: 'DRAINING'
+};
+
 function hasLevelTarget() {
   return Game.mode === 'campaign';
 }
@@ -34,14 +40,85 @@ function getEndSpawnInterval() {
   return campaignMaxSpawnInterval(Game.levelIdx || 1);
 }
 
-/** 0…1 — доля разгона спавна (1 = максимальная скорость). */
+function getSpawnBudget() {
+  return getTargetCars();
+}
+
+function getSpawnedCars() {
+  return Game.stats.spawned || 0;
+}
+
+/** Клиентский трафик уровня (не GBR / tanker / bg). */
+function isLevelTrafficVehicle(v) {
+  if (!v) return false;
+  if (v.kind === 'car') return true;
+  if (v.kind === 'scalper' || v.isScalper) return true;
+  if (v.kind === 'corporate') return true;
+  return false;
+}
+
+/** Автомобили уровня на кольце + в накопителе + prepared. */
+function countVehiclesOnMap() {
+  let n = 0;
+  for (const v of Game.vehicles || []) {
+    if (isLevelTrafficVehicle(v)) n++;
+  }
+  for (const v of Game.holder || []) {
+    if (isLevelTrafficVehicle(v)) n++;
+  }
+  if (Game.holderPriorityWait && isLevelTrafficVehicle(Game.holderPriorityWait)) n++;
+  if (Game.prepared?.vehicle && isLevelTrafficVehicle(Game.prepared.vehicle)) n++;
+  else if (Game.prepared && !Game.prepared.ready) n++;
+  return n;
+}
+
+/** Общий бюджет: обычные + Scalper + будущие special. */
+function canSpawnMoreCars() {
+  const budget = getSpawnBudget();
+  if (budget == null) return true;
+  return getSpawnedCars() < budget;
+}
+
+function canSpawnRegularCar() {
+  return canSpawnMoreCars();
+}
+
+/** Scalper занимает тот же слот бюджета, что и обычная машина (v0.4.3.3). */
+function canSpawnScalper() {
+  return canSpawnMoreCars();
+}
+
+function registerSpawnedCar() {
+  Game.stats.spawned = getSpawnedCars() + 1;
+  syncLevelPhase();
+}
+
+function syncLevelPhase() {
+  if (!hasLevelTarget()) {
+    Game.levelPhase = LevelPhase.SPAWNING;
+    return Game.levelPhase;
+  }
+  const target = getTargetCars();
+  if (target != null && getSpawnedCars() >= target) {
+    Game.levelPhase = LevelPhase.DRAINING;
+  } else {
+    Game.levelPhase = LevelPhase.SPAWNING;
+  }
+  return Game.levelPhase;
+}
+
+function isLevelDraining() {
+  return Game.levelPhase === LevelPhase.DRAINING;
+}
+
+/** 0…1 — разгон спавна. Кампания: по spawned; endless: по served. */
 function spawnRampProgress() {
   if (Game.mode === 'endless') {
     return clamp01(Game.stats.served / ENDLESS_SPAWN.rampCars);
   }
   const target = getTargetCars();
   if (!target) return 0;
-  const p = Game.stats.served / target;
+  const p = getSpawnedCars() / target;
   if (p >= SPAWN_RAMP_FRAC) return 1;
   return clamp01(p / SPAWN_RAMP_FRAC);
 }
@@ -52,7 +129,7 @@ function levelProgress() {
   }
   const target = getTargetCars();
   if (!target) return 0;
-  return clamp01(Game.stats.served / target);
+  return clamp01(getSpawnedCars() / target);
 }
 
 function currentDiff() {
@@ -66,66 +143,29 @@ function currentSpawnInterval() {
   return start - (start - end) * ramp;
 }
 
+/** HUD прогресса: кампания — spawned/target; endless — served. */
 function getServedHudText() {
   if (Game.mode === 'endless') {
     return Game.stats.served + ' обслужено';
   }
   const target = getTargetCars();
-  return Game.stats.served + ' / ' + target;
+  const phase = Game.levelPhase === LevelPhase.DRAINING ? ' · слив' : '';
+  return getSpawnedCars() + ' / ' + target + phase;
 }
 
-/** Бюджет обычных машин уровня; null = без лимита (endless). */
-function getSpawnBudget() {
-  return getTargetCars();
-}
-
-function getSpawnedCars() {
-  return Game.stats.spawned || 0;
-}
-
-/** Можно ли создать ещё одного обычного клиента (не Scalper). */
-function canSpawnRegularCar() {
-  const budget = getSpawnBudget();
-  if (budget == null) return true;
-  return getSpawnedCars() < budget;
-}
-
-/**
- * Запас обычных машин в конце кампании без Scalper (v0.4.2.5).
- * ≤1000 → 10; >1000 → 20. Endless → null (без лимита).
- */
-function getSpecialSpawnReserve() {
-  const target = getTargetCars();
-  if (target == null) return null;
-  return target <= 1000 ? 10 : 20;
-}
-
-/** Верхняя граница spawned, до которой ещё можно создать Scalper. */
-function getSpecialSpawnLimit() {
-  const target = getTargetCars();
-  if (target == null) return null;
-  return Math.max(0, target - getSpecialSpawnReserve());
-}
-
-/** Новый Scalper разрешён только пока spawned < specialSpawnLimit (campaign). */
-function canSpawnScalper() {
-  const limit = getSpecialSpawnLimit();
-  if (limit == null) return true;
-  return getSpawnedCars() < limit;
-}
-
-/**
- * Создать обычный клиентский автомобиль с учётом spawnBudget.
- * @returns {object|null}
- */
 function spawnRegularCar(diff) {
   if (!canSpawnRegularCar()) return null;
   const car = makeCar(diff);
-  Game.stats.spawned = getSpawnedCars() + 1;
+  registerSpawnedCar();
   return car;
 }
 
 function tickSpawnPipeline(dt, diff) {
+  if (isLevelDraining() || !canSpawnMoreCars()) {
+    if (Game.prepared && !Game.prepared.ready) Game.prepared = null;
+    Game.spawnTimer = Math.max(Game.spawnTimer, 0.25);
+  }
+
   if (Game.prepared && !Game.prepared.ready) {
     Game.prepared.t -= dt;
     if (Game.prepared.t <= 0) {
@@ -145,6 +185,10 @@ function tickSpawnPipeline(dt, diff) {
   Game.spawnTimer -= dt;
   if (Game.spawnTimer > 0) return;
   const iv = currentSpawnInterval() * rand(.75, 1.25);
+  if (!canSpawnMoreCars()) {
+    Game.spawnTimer = iv;
+    return;
+  }
   if (Game.holder.length < CONFIG.holder.max) {
     if (Game.holderPriorityWait) {
       Game.holder.unshift(Game.holderPriorityWait);
@@ -193,7 +237,6 @@ function callTanker(order) {
   const liters = order?.liters != null ? order.liters : tankerDeliveryLiters();
   const cost = order?.cost != null ? order.cost : tankerDeliveryCost();
   const bonuses = order?.bonuses != null ? order.bonuses : 0;
-  // Единая кредитная политика (legacy + меню): canOrderTanker(money, cost).
   if (!canOrderTanker(undefined, cost)) {
     const p = Depot.pos || Road.posAt(Road.spawnS, 0);
     addFloat(p.x, p.y - 30, 'Недостаточно кредитного лимита для закупки топлива', '#ef5350');
@@ -203,6 +246,8 @@ function callTanker(order) {
   if (bonuses > 0) {
     Game.bonuses = (Game.bonuses || 0) + bonuses;
   }
+  // Заказ бензовоза снимает топливный кризис-таймер.
+  Game.fuelCrisisT = 0;
   saveRunEconomy();
   const t = makeTanker(truck.id, liters);
   setTankerPhase(t, TankerPhase.SPAWNING);
@@ -228,10 +273,23 @@ function callGBR() {
   manualCallGbr({ x: GBRBase.pos.x, y: GBRBase.pos.y - 20 });
 }
 
+/** @deprecated removed in 0.4.3.3 — stub for old imports */
+function getSpecialSpawnReserve() {
+  return null;
+}
+
+/** @deprecated removed in 0.4.3.3 — alias of spawn budget */
+function getSpecialSpawnLimit() {
+  return getSpawnBudget();
+}
+
 export {
+  LevelPhase,
   getTargetCars, hasLevelTarget, getEndSpawnInterval, levelProgress, spawnRampProgress,
   currentDiff, currentSpawnInterval, getServedHudText, scalperCooldown,
   getSpawnBudget, getSpawnedCars, canSpawnRegularCar, spawnRegularCar,
-  getSpecialSpawnReserve, getSpecialSpawnLimit, canSpawnScalper,
+  canSpawnMoreCars, canSpawnScalper, registerSpawnedCar,
+  isLevelTrafficVehicle, countVehiclesOnMap, syncLevelPhase, isLevelDraining,
+  getSpecialSpawnReserve, getSpecialSpawnLimit,
   tickSpawnPipeline, callTanker, callGBR
 };

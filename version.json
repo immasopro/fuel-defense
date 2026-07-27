@@ -1,8 +1,9 @@
 {
-  "version": "0.4.3.2",
+  "version": "0.4.3.3",
   "notes": [
-    "Scalper spawn blocked in last 10/20 cars of campaign level",
-    "Fix stuck QUEUE/OWNER:STATION after missed pocket",
-    "Pocket approach timeout restores Scalper to tour"
+    "Level progress by spawnedCars (includes Scalper)",
+    "DRAINING phase then win when map empty",
+    "Removed Scalper end-of-level special reserve",
+    "Fuel crisis 8s warning timer"
   ]
 }

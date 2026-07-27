@@ -4,8 +4,8 @@ import { Game } from './core/gameState.js';
 import { Road } from './world/roadNetwork.js';
 import { updateLane } from './vehicles/vehicle.js';
 import { innerLaneList, outerLaneList, releaseHolderBurst } from './systems/trafficSystem.js';
-import { currentDiff, tickSpawnPipeline, getTargetCars, scalperCooldown } from './systems/spawnSystem.js';
-import { updateDefeatTimer, endGame, checkFuelCrisis } from './systems/defeatSystem.js';
+import { currentDiff, tickSpawnPipeline, scalperCooldown, syncLevelPhase } from './systems/spawnSystem.js';
+import { updateDefeatTimer, checkFuelCrisis, checkLevelComplete } from './systems/defeatSystem.js';
 import { addFloat } from './systems/economySystem.js';
 import { distributeDepotFuel } from './stations/reservoir.js';
 import { tickSpecialSpawns, updateVehicles, postStationMaintenance } from './systems/stationSystem.js';
@@ -38,6 +38,8 @@ export function newGame(mode, levelIdx) {
   Game.floats = [];
   Game.spawnTimer = SPAWN_START_INTERVAL;
   Game.defeatT = 0;
+  Game.fuelCrisisT = 0;
+  Game.levelPhase = 'SPAWNING';
   Game.light = { phase: 'green', redT: 0, cd: 0 };
   Game.scalperTimer = scalperCooldown();
   Game.tanker = { unit: null };
@@ -59,6 +61,7 @@ export function newGame(mode, levelIdx) {
   Game.menuOpen = false;
   Game.menuReturnAfterManual = false;
   Game.defeatReason = null;
+  syncLevelPhase();
   for (const slot of Road.slots) slot.station = null;
   closePanel();
   UI.warning.classList.add('hidden');
@@ -100,7 +103,13 @@ function updateTimersAndWarning(dt) {
   if (Game.depotLabel > 0) Game.depotLabel -= dt;
   for (const f of Game.floats) f.t += dt;
   Game.floats = Game.floats.filter(f => f.t < f.life);
-  if (Game.defeatT > 0.15) {
+  const crisisLimit = CONFIG.fuelCrisisTime ?? 8;
+  if (Game.fuelCrisisT > 0.05) {
+    UI.warning.textContent =
+      '⚠️ Недостаточно топлива для завершения уровня. ' +
+      Math.max(0, crisisLimit - Game.fuelCrisisT).toFixed(1) + 'с';
+    UI.warning.classList.remove('hidden');
+  } else if (Game.defeatT > 0.15) {
     UI.warning.textContent =
       '⚠️ НАКОПИТЕЛЬ ПОЛОН! ' + Math.max(0, CONFIG.defeatTime - Game.defeatT).toFixed(1) + 'с';
     UI.warning.classList.remove('hidden');
@@ -134,15 +143,9 @@ export function update(dt) {
   tickGbrPursuit();
   updateVehicles(dt, L);
   if (Game.state !== 'play') return;
-  if (checkFuelCrisis()) return;
-  if (Game.mode === 'campaign') {
-    const target = getTargetCars();
-    if (target != null && Game.stats.served >= target) {
-      if (Game.money < 0) endGame(false, 'bankruptcy');
-      else endGame(true);
-      return;
-    }
-  }
+  syncLevelPhase();
+  if (checkFuelCrisis(dt)) return;
+  if (checkLevelComplete()) return;
   postStationMaintenance(dt);
   updateTimersAndWarning(dt);
 

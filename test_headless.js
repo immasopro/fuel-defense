@@ -429,10 +429,10 @@ assert(CAMPAIGN_LEVEL_COUNT === 20, 'CAMPAIGN_LEVEL_COUNT 20');
 FD.newGame('campaign', 1);
 assert(getTargetCars() === 100, 'level 1 target 100 cars');
 assert(currentSpawnInterval() === 4.0, 'level starts at 4s spawn interval');
-Game.stats.served = 80;
+Game.stats.spawned = 80;
 assert(Math.abs(currentSpawnInterval() - 2.0) < 0.01, 'level 1 at 80% progress max spawn');
-assert(spawnRampProgress() === 1, 'ramp complete at 80% served');
-Game.stats.served = 40;
+assert(spawnRampProgress() === 1, 'ramp complete at 80% spawned');
+Game.stats.spawned = 40;
 const midIv = currentSpawnInterval();
 assert(Math.abs(midIv - 3.0) < 0.01, 'spawn interval ramps at 40% (half ramp)');
 assert(getServedHudText() === '40 / 100', 'campaign HUD text');
@@ -440,7 +440,7 @@ assert(getServedHudText() === '40 / 100', 'campaign HUD text');
 FD.newGame('campaign', 6);
 assert(getTargetCars() === 360, 'level 6 target 360');
 assert(campaignMaxSpawnInterval(6) === 1.5, 'level 6 max interval 1.5s');
-Game.stats.served = 288;
+Game.stats.spawned = 288;
 assert(Math.abs(currentSpawnInterval() - 1.5) < 0.01, 'level 6 at 80% on max spawn');
 
 FD.newGame('campaign', 10);
@@ -812,11 +812,11 @@ assert(despawnLog, 'Despawn complete logged');
 // version check
 const { compareVersions, isNewerVersion, GAME_VERSION, hasPendingUpdate, _setRemoteVersionForTest } =
   await import('./js/systems/versionCheck.js');
-assert(GAME_VERSION === '0.4.3.2', 'GAME_VERSION 0.4.3.2');
-assert(compareVersions('0.4.3.2', '0.4.3.1') > 0, 'semver newer');
-assert(!isNewerVersion('0.4.3.2'), 'same version not newer');
-assert(isNewerVersion('0.4.3.3'), '0.4.3.3 is newer');
-_setRemoteVersionForTest({ version: '0.4.3.3', notes: ['Тест'] });
+assert(GAME_VERSION === '0.4.3.3', 'GAME_VERSION 0.4.3.3');
+assert(compareVersions('0.4.3.3', '0.4.3.2') > 0, 'semver newer');
+assert(!isNewerVersion('0.4.3.3'), 'same version not newer');
+assert(isNewerVersion('0.4.3.4'), '0.4.3.4 is newer');
+_setRemoteVersionForTest({ version: '0.4.3.4', notes: ['Тест'] });
 assert(hasPendingUpdate(), 'pending update detected');
 
 // v0.2.8 depot branch + reservoir HUD
@@ -888,7 +888,7 @@ assert(Game.time > 0, 'game advances after rAF frames');
 globalThis.window.requestAnimationFrame = prevRaf;
 
 const { GameVersion } = await import('./js/config/gameVersion.js');
-assert(GameVersion.version === '0.4.3.2', 'GameVersion is 0.4.3.2');
+assert(GameVersion.version === '0.4.3.3', 'GameVersion is 0.4.3.3');
 assert(GameVersion.changes.length <= 8, 'patch notes capped at 8 items');
 
 const { StationApi } = await import('./js/systems/stationApi.js');
@@ -1275,7 +1275,7 @@ const iv0 = currentSpawnInterval();
 assert(CONFIG.scalper.spawnIntervalMult === 10, 'scalper mult 10');
 assert(Math.abs(scalperCooldown() - iv0 * 10) < 0.001, 'cooldown = 10 × spawn interval');
 assert(Math.abs(Game.scalperTimer - scalperCooldown()) < 0.001, 'initial scalper timer');
-Game.stats.served = 100;
+Game.stats.spawned = 100;
 const iv1 = currentSpawnInterval();
 assert(iv1 < iv0, 'spawn interval ramps down');
 assert(Math.abs(scalperCooldown() - iv1 * 10) < 0.001, 'cooldown tracks spawn interval');
@@ -1288,7 +1288,7 @@ assert(tankerCreditLimit() === -70000, 'credit limit -70000');
 assert(canOrderTanker(50000), '50k can order on credit');
 assert(!canOrderTanker(-80000), '-80k over credit');
 FD.actionBuildStation(Road.slots[0], 'a92');
-Game.stats.served = 100;
+Game.stats.spawned = 100;
 Game.money = -1000;
 endGame(false, 'bankruptcy');
 assert(Game.state === 'over', 'bankruptcy on negative balance at level end');
@@ -1300,9 +1300,14 @@ Road.slots[0].station.res = 0;
 Game.money = -200000;
 Game.tanker.unit = null;
 readyTanker();
-Game.stats.served = 0;
+Game.stats.spawned = 0;
 Game.holder.push(FD.makeCar(0));
-assert(checkFuelCrisis(), 'fuel crisis triggers defeat');
+assert(CONFIG.fuelCrisisTime === 8, 'fuel crisis timer 8s');
+let crisisHit = false;
+for (let i = 0; i < 20; i++) {
+  if (checkFuelCrisis(1)) { crisisHit = true; break; }
+}
+assert(crisisHit, 'fuel crisis triggers defeat after timer');
 assert(Game.defeatReason === 'fuel_crisis', 'fuel crisis reason');
 assert(Game.state === 'over', 'fuel crisis game over');
 
@@ -1334,10 +1339,10 @@ const migrated = migrateSaveObject({ version: '0.2.11', depot: { level: 2, res: 
 assert(migrated.tankerTruck.level === 1, 'migration tanker level I');
 assert(migrated.fleet.level === 1, 'migration fleet level I');
 assert(migrated.depot.res <= migrated.depot.cap, 'migration clamps fuel');
-assert(isNewerVersion('0.4.3.3'), 'semver newer');
-assert(!isNewerVersion('0.4.3.2'), 'same version not newer');
+assert(isNewerVersion('0.4.3.4'), 'semver newer');
+assert(!isNewerVersion('0.4.3.3'), 'same version not newer');
 _resetVersionNotificationForTest();
-showVersionNotification('0.4.3.2');
+showVersionNotification('0.4.3.3');
 assert(true, 'version notification once per session');
 
 // v0.4.2.1 — аварийный обмен бонусов
@@ -1432,13 +1437,14 @@ Game.stats.served = 120;
 assert(Game.state === 'play', 'D: level continues at served 120 / spawned 130');
 assert(getSpawnedCars() === 130 && Game.stats.served === 120, 'D: spawned 130 served 120');
 
-// Scalper не в бюджете
+// Scalper factory сам по себе не трогает spawned; registerSpawnedCar — да
 FD.newGame('campaign', 2);
 Game.stats.spawned = 130;
 assert(!canSpawnRegularCar(), 'regular blocked at budget');
 const scBudget = FD.makeScalper();
 assert(scBudget && scBudget.kind === 'scalper', 'F: scalper factory still works');
-assert(getSpawnedCars() === 130, 'F: scalper does not bump spawned');
+assert(getSpawnedCars() === 130, 'F: makeScalper alone does not bump spawned');
+assert(scBudget.isScalper === true, 'F: isScalper flag set');
 
 // Endless без лимита
 FD.newGame('endless');
@@ -1481,73 +1487,99 @@ for (let i = 0; i < 20; i++) if (spawnRegularCar(0)) left++;
 assert(left === 10 && getSpawnedCars() === 130, 'I: only remaining budget after reload');
 clearRunEconomy();
 
-// v0.4.2.5 — special spawn limit + QUEUE lifecycle fix
-const { getSpecialSpawnLimit, getSpecialSpawnReserve, canSpawnScalper } =
+// v0.4.3.3 — общий бюджет spawned (regular + Scalper), без separate Scalper reserve
+const { canSpawnScalper, LevelPhase, syncLevelPhase, countVehiclesOnMap, registerSpawnedCar } =
   await import('./js/systems/spawnSystem.js');
 const { tickSpecialSpawns } = await import('./js/systems/specialVehicles.js');
 const { releasePocket } = await import('./js/stations/stationQueue.js');
+const { checkLevelComplete } = await import('./js/systems/defeatSystem.js');
 
 FD.newGame('campaign', 5);
 assert(getTargetCars() === 280, 'level 5 target 280');
-assert(getSpecialSpawnReserve() === 10, '≤1000 reserve 10');
-assert(getSpecialSpawnLimit() === 270, 'level 5 special limit 270');
-Game.stats.spawned = 269;
-assert(canSpawnScalper(), 'scalper ok at spawned 269');
-Game.stats.spawned = 270;
-assert(!canSpawnScalper(), 'scalper blocked at specialSpawnLimit');
+Game.stats.spawned = 279;
+syncLevelPhase();
+assert(canSpawnScalper(), 'scalper ok at spawned 279');
 Game.stats.spawned = 280;
+syncLevelPhase();
 assert(!canSpawnScalper(), 'scalper blocked at target');
+assert(Game.levelPhase === LevelPhase.DRAINING, 'DRAINING at target');
 
 FD.newGame('campaign', 10);
 assert(getTargetCars() === 1000, 'level 10 target 1000');
-assert(getSpecialSpawnReserve() === 10, '1000 still reserve 10');
-assert(getSpecialSpawnLimit() === 990, '1000 → limit 990');
-
-FD.newGame('campaign', 20);
-assert(getTargetCars() === 5000, 'level 20 target 5000');
-assert(getSpecialSpawnReserve() === 20, '>1000 reserve 20');
-assert(getSpecialSpawnLimit() === 4980, '5000 → limit 4980');
+Game.stats.spawned = 999;
+assert(canSpawnScalper(), 'L10 scalper ok before target');
+Game.stats.spawned = 1000;
+assert(!canSpawnScalper(), 'L10 scalper blocked at target');
 
 FD.newGame('endless');
-assert(getSpecialSpawnLimit() == null && canSpawnScalper(), 'endless scalper uncapped');
+assert(canSpawnScalper(), 'endless scalper uncapped');
 
-// D-SPAWN-001: no new scalper after limit
+// No new scalper after target
 FD.newGame('campaign', 5);
 FD.actionBuildStation(Road.slots[0], 'a92');
-Game.stats.spawned = 270;
-Game.scalper.unit = null;
-Game.scalperTimer = 0;
-tickSpecialSpawns(0);
-assert(!Game.scalper.unit, 'D-001: no scalper at limit 270');
 Game.stats.spawned = 280;
-Game.scalperTimer = 0;
-for (let i = 0; i < 10; i++) tickSpecialSpawns(0);
-assert(!Game.scalper.unit, 'D-001: no scalper at spawned=target');
-
-// Existing scalper survives threshold (not deleted)
-FD.newGame('campaign', 5);
-FD.actionBuildStation(Road.slots[0], 'a92');
-Game.stats.spawned = 269;
+syncLevelPhase();
 Game.scalper.unit = null;
 Game.scalperTimer = 0;
 tickSpecialSpawns(0);
-assert(Game.scalper.unit, 'scalper spawns before limit');
+assert(!Game.scalper.unit, 'no scalper at spawned=target');
+
+// Existing scalper survives threshold; counts toward spawned when created via tick
+FD.newGame('campaign', 5);
+FD.actionBuildStation(Road.slots[0], 'a92');
+Game.stats.spawned = 279;
+Game.scalper.unit = null;
+Game.scalperTimer = 0;
+const spawnedBeforeSc = Game.stats.spawned;
+tickSpecialSpawns(0);
+assert(Game.scalper.unit, 'scalper spawns before target');
+assert(Game.stats.spawned === spawnedBeforeSc + 1, 'scalper increments spawned');
 const liveSc = Game.scalper.unit;
+assert(liveSc.isScalper === true, 'isScalper flag');
 Game.stats.spawned = 280;
+syncLevelPhase();
 tickSpecialSpawns(1);
 assert(Game.scalper.unit === liveSc, 'existing scalper kept after threshold');
 assert(Game.vehicles.includes(liveSc) || Game.holder.includes(liveSc), 'existing scalper still present');
 
-// After despawn past limit — no replacement
+// After despawn past target — no replacement
 const remLive = new Set();
 despawnScalper(liveSc, remLive);
 for (const v of remLive) {
   const ix = Game.vehicles.indexOf(v); if (ix >= 0) Game.vehicles.splice(ix, 1);
   const hx = Game.holder.indexOf(v); if (hx >= 0) Game.holder.splice(hx, 1);
 }
+Game.scalper.unit = null;
 Game.scalperTimer = 0;
 tickSpecialSpawns(0);
-assert(!Game.scalper.unit, 'no new scalper after despawn past limit');
+assert(!Game.scalper.unit, 'no new scalper after despawn past target');
+
+// Level complete: spawned>=target && vehiclesOnMap==0
+FD.newGame('campaign', 1);
+Game.stats.spawned = 100;
+Game.vehicles = [];
+Game.holder = [];
+Game.prepared = null;
+Game.money = 1000;
+syncLevelPhase();
+assert(Game.levelPhase === LevelPhase.DRAINING, 'L1 draining');
+assert(countVehiclesOnMap() === 0, 'map empty');
+assert(checkLevelComplete(), 'win when drained');
+assert(Game.state === 'win', 'win state');
+FD.newGame('campaign', 1);
+Game.stats.spawned = 100;
+Game.vehicles = [];
+Game.holder = [];
+Game.money = -50;
+syncLevelPhase();
+assert(checkLevelComplete(), 'bankruptcy when drained negative');
+assert(Game.defeatReason === 'bankruptcy', 'bankruptcy after drain');
+FD.newGame('campaign', 1);
+Game.stats.spawned = 100;
+Game.vehicles = [FD.makeCar(0)];
+Game.money = 1000;
+syncLevelPhase();
+assert(!checkLevelComplete(), 'no win while cars on map');
 
 // D-SPAWN-002: releasePocket restores tour
 FD.newGame('campaign', 5);

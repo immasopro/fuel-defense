@@ -27,6 +27,14 @@ ES module live bindings resolve these at call time (no top-level circular init).
 5. **`holderBusy`** — module-level flag kept in `trafficSystem.js` per assignment.
 6. **Headless test** — uses `globalThis.__FD_HEADLESS__` to skip `boot()`; DOM is mocked minimally (no full canvas semantics).
 
+## Patch 0.4.3.3 — Spawned progress, DRAINING, fuel crisis timer
+
+- **Progress** — campaign win gate uses `spawned >= target` + `vehiclesOnMap == 0` (not `served`).
+- **Budget** — Scalper increments `spawned`; no separate last-10/20 Scalper reserve.
+- **DRAINING** — after budget full; existing traffic (incl. Scalper/GBR work) finishes.
+- **Fuel crisis** — 8s timer + warning «Недостаточно топлива…»; cancelled when tanker ordered.
+- **APK** — rebuilt as v0.4.3.3.
+
 ## Patch 0.4.3.2 — GBR RETURNING no Euclidean teleport
 
 - **Bug** — after catch just past base, `dp < 40` completed RETURNING while `ringAhead ≈ L` (visual teleport).
