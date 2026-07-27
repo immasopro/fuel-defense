@@ -2,6 +2,7 @@ import { CONFIG } from '../config/index.js';
 import { Road, pumpPose } from './roadNetwork.js';
 import { mod } from '../core/utils.js';
 import { Game } from '../core/gameState.js';
+import { serviceLane, exitLane, laneLat, laneCount } from './lanes.js';
 
 const Depot = {
   pos: null, accessS: 0, unloadStopS: 0, unloadPose: null, routeToUnload: [],
@@ -14,7 +15,7 @@ const Depot = {
 
     const spot7 = Road.slots[6];
     this.ringJoinS = mod(spot7.s + 34, Road.length);
-    const ringJoin = Road.posAt(this.ringJoinS, Road.laneW / 2);
+    const ringJoin = Road.posAt(this.ringJoinS, laneLat(serviceLane()));
     this.ringJoin = { x: ringJoin.x, y: ringJoin.y, a: ringJoin.a };
 
     const unloadY = cy + 22;
@@ -23,7 +24,7 @@ const Depot = {
     this.unloadStopS = this.ringJoinS;
     this.accessS = this.ringJoinS;
     this.exitS = Road.spawnS;
-    this.branchWidth = Road.laneW * 2;
+    this.branchWidth = Road.laneW * Math.max(2, laneCount());
 
     const midY = ringJoin.y + (unloadY - ringJoin.y) * 0.42;
     this.driveToDepot = [
@@ -54,7 +55,7 @@ const GBRBase = {
     // Не привязывать к spot 4 — якорь только Road.spawnS.
     const L = Road.length;
     this.spawnS = mod(Road.spawnS + L * 0.5, L);
-    this.pos = Road.posAt(this.spawnS, -Road.laneW * 0.9);
+    this.pos = Road.posAt(this.spawnS, laneLat(exitLane()) * 0.9);
   }
 };
 

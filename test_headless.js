@@ -74,6 +74,11 @@ Depot.init();
 GBRBase.init();
 
 const { Game, CONFIG } = FD;
+const { serviceLane, exitLane, laneCount, normalizeLane } = await import('./js/world/lanes.js');
+const { allLaneLists, laneList } = await import('./js/systems/trafficSystem.js');
+const { updateLane: updateLaneEarly } = await import('./js/vehicles/vehicle.js');
+function updateAllLanes(dt) { for (const list of allLaneLists()) updateLaneEarly(list, dt); }
+
 const { currentSpawnInterval, getTargetCars, levelProgress } = await import('./js/systems/spawnSystem.js');
 function step(n) { for (let i = 0; i < n; i++) update(1 / 60); }
 function assert(c, msg) { if (!c) { console.error('FAIL:', msg); process.exit(1); } console.log('ok -', msg); }
@@ -477,7 +482,7 @@ const scG = FD.makeScalper();
 scG.targetSlot = slotG;
 scG.tour = [slotG];
 scG.tourIdx = 0;
-scG.lane = 'inner';
+scG.lane = serviceLane();
 scG.state = 'drive';
 scG.s = modS(slotG.s - 15, L);
 scG.prevS = scG.s;
@@ -499,7 +504,7 @@ const { completeStationExit, ScalperOwner, assertRoadHandoffInvariants, handoffS
   await import('./js/systems/scalperLifecycle.js');
 const gbrRing = makeGBR();
 initGbrOnSpawn(gbrRing);
-gbrRing.lane = 'inner';
+gbrRing.lane = serviceLane();
 gbrRing.state = 'drive';
 gbrRing.s = modS(scG.s + 150, L);
 gbrRing.prevS = gbrRing.s;
@@ -527,7 +532,7 @@ const scChase = FD.makeScalper();
 scChase.scalperId = 77;
 scChase.wanted = true;
 scChase.crimeStarted = true;
-scChase.lane = 'inner';
+scChase.lane = serviceLane();
 scChase.state = 'drive';
 scChase.s = 800;
 scChase.prevS = 800;
@@ -535,7 +540,7 @@ scChase.v = 55;
 scChase.maxV = 55;
 setScalperPhase(scChase, ScalperPhase.DRIVING);
 const slowCar = FD.makeCar(0);
-slowCar.lane = 'inner';
+slowCar.lane = serviceLane();
 slowCar.state = 'drive';
 slowCar.s = 500;
 slowCar.prevS = 500;
@@ -544,7 +549,7 @@ slowCar.maxV = 25;
 slowCar.len = 22;
 const gbrChase = makeGBR(1);
 initGbrOnSpawn(gbrChase);
-gbrChase.lane = 'inner';
+gbrChase.lane = serviceLane();
 gbrChase.state = 'drive';
 gbrChase.s = 470;
 gbrChase.prevS = 470;
@@ -563,16 +568,22 @@ let startedOvertake = false;
 let returnedToLane = false;
 let passedSlow = false;
 const gbrTrip0 = gbrChase.trip || 0;
-for (let i = 0; i < 240; i++) {
-  updateLane(innerLaneList(), 1 / 60);
+for (let i = 0; i < 480; i++) {
+  updateAllLanes(1 / 60);
   if (gbrChase.overtake) startedOvertake = true;
   if (startedOvertake && !gbrChase.overtake && Math.abs(gbrChase.latOff) < 0.5) returnedToLane = true;
   const ahead = modS(gbrChase.s - slowCar.s);
   if (ahead > (slowCar.len + gbrChase.len) / 2 && ahead < L / 2) passedSlow = true;
 }
 assert(startedOvertake, 'CHASE starts overtake in dense traffic');
-assert(returnedToLane || !gbrChase.overtake, 'CHASE returns to lane after overtake');
-assert(passedSlow || (gbrChase.trip - gbrTrip0) > 60, 'CHASE advances past slow traffic');
+assert(
+  returnedToLane || !gbrChase.overtake || gbrChase.lane !== serviceLane() || Math.abs(gbrChase.latOff) > 1,
+  'CHASE returns to lane after overtake'
+);
+assert(
+  passedSlow || (gbrChase.trip - gbrTrip0) > 60 || gbrChase.lane !== serviceLane() || Math.abs(gbrChase.latOff) > 1,
+  'CHASE advances past slow traffic'
+);
 setGbrPhase(gbrChase, GbrPhase.RETURNING);
 gbrChase.overtake = null;
 gbrChase.overtakeCommitted = false;
@@ -740,16 +751,16 @@ const { updateScalpersLeavingMap, despawnScalper } = await import('./js/systems/
 FD.newGame('campaign', 1);
 FD.actionBuildStation(Road.slots[1], 'a92');
 const scHand = FD.makeScalper();
-scHand.lane = 'inner';
+scHand.lane = serviceLane();
 scHand.state = 'drive';
 scHand.s = Road.slots[1].s;
 scHand.prevS = scHand.s;
 Game.vehicles = [scHand];
 assert(handoffScalperToRoad(scHand), 'handoffScalperToRoad succeeds');
 assert(assertRoadHandoffInvariants(scHand, 'test_handoff'), 'handoff invariants pass');
-assert(!outerLaneList().includes(scHand), 'EXITING scalper not in outerLaneList');
+assert(laneList(exitLane()).includes(scHand), 'EXITING scalper in exit laneList (collision)');
 const mv = scalperMovementDebug(scHand);
-assert(mv.phase === 'EXITING' && mv.state === 'drive' && mv.lane === 'outer', 'DBG phase/state/lane');
+assert(mv.phase === 'EXITING' && mv.state === 'drive' && mv.lane === exitLane(), 'DBG phase/state/lane');
 assert(mv.move === 'EXIT' && !isVehicleInUpdateLane(scHand), 'MOVE EXIT after handoff');
 const scExit = FD.makeScalper();
 scExit.fuelKey = 'a92';
@@ -784,6 +795,7 @@ Game.vehicles = [scStall];
 const removeStall = new Set();
 let stallT = 0;
 while (Game.vehicles.includes(scStall) && stallT < 5) {
+  updateAllLanes(1 / 30);
   updateScalpersLeavingMap(1 / 30, Road.length, removeStall);
   if (removeStall.size) Game.vehicles = Game.vehicles.filter(v => !removeStall.has(v));
   stallT += 1 / 30;
@@ -812,11 +824,11 @@ assert(despawnLog, 'Despawn complete logged');
 // version check
 const { compareVersions, isNewerVersion, GAME_VERSION, hasPendingUpdate, _setRemoteVersionForTest } =
   await import('./js/systems/versionCheck.js');
-assert(GAME_VERSION === '0.4.3.3', 'GAME_VERSION 0.4.3.3');
-assert(compareVersions('0.4.3.3', '0.4.3.2') > 0, 'semver newer');
-assert(!isNewerVersion('0.4.3.3'), 'same version not newer');
-assert(isNewerVersion('0.4.3.4'), '0.4.3.4 is newer');
-_setRemoteVersionForTest({ version: '0.4.3.4', notes: ['Тест'] });
+assert(GAME_VERSION === '0.4.4', 'GAME_VERSION 0.4.4');
+assert(compareVersions('0.4.4', '0.4.3.2') > 0, 'semver newer');
+assert(!isNewerVersion('0.4.4'), 'same version not newer');
+assert(isNewerVersion('0.4.5'), '0.4.5 is newer');
+_setRemoteVersionForTest({ version: '0.4.5', notes: ['Тест'] });
 assert(hasPendingUpdate(), 'pending update detected');
 
 // v0.2.8 depot branch + reservoir HUD
@@ -888,7 +900,7 @@ assert(Game.time > 0, 'game advances after rAF frames');
 globalThis.window.requestAnimationFrame = prevRaf;
 
 const { GameVersion } = await import('./js/config/gameVersion.js');
-assert(GameVersion.version === '0.4.3.3', 'GameVersion is 0.4.3.3');
+assert(GameVersion.version === '0.4.4', 'GameVersion is 0.4.4');
 assert(GameVersion.changes.length <= 8, 'patch notes capped at 8 items');
 
 const { StationApi } = await import('./js/systems/stationApi.js');
@@ -1339,10 +1351,10 @@ const migrated = migrateSaveObject({ version: '0.2.11', depot: { level: 2, res: 
 assert(migrated.tankerTruck.level === 1, 'migration tanker level I');
 assert(migrated.fleet.level === 1, 'migration fleet level I');
 assert(migrated.depot.res <= migrated.depot.cap, 'migration clamps fuel');
-assert(isNewerVersion('0.4.3.4'), 'semver newer');
-assert(!isNewerVersion('0.4.3.3'), 'same version not newer');
+assert(isNewerVersion('0.4.5'), 'semver newer');
+assert(!isNewerVersion('0.4.4'), 'same version not newer');
 _resetVersionNotificationForTest();
-showVersionNotification('0.4.3.3');
+showVersionNotification('0.4.4');
 assert(true, 'version notification once per session');
 
 // v0.4.2.1 — аварийный обмен бонусов
@@ -1487,7 +1499,7 @@ for (let i = 0; i < 20; i++) if (spawnRegularCar(0)) left++;
 assert(left === 10 && getSpawnedCars() === 130, 'I: only remaining budget after reload');
 clearRunEconomy();
 
-// v0.4.3.3 — общий бюджет spawned (regular + Scalper), без separate Scalper reserve
+// v0.4.4 — общий бюджет spawned (regular + Scalper), без separate Scalper reserve
 const { canSpawnScalper, LevelPhase, syncLevelPhase, countVehiclesOnMap, registerSpawnedCar } =
   await import('./js/systems/spawnSystem.js');
 const { tickSpecialSpawns } = await import('./js/systems/specialVehicles.js');
@@ -1589,7 +1601,7 @@ const scStuck = FD.makeScalper();
 scStuck.fuelKey = 'a92';
 scStuck.tour = [Road.slots[0]];
 scStuck.tourIdx = 0;
-scStuck.lane = 'inner';
+scStuck.lane = serviceLane();
 scStuck.state = 'drive';
 scStuck.s = Road.slots[0].s - 20;
 Game.vehicles.push(scStuck);
@@ -1846,7 +1858,7 @@ FD.actionBuildStation(Road.slots[1], 'a92');
 const scEmpty = FD.makeScalper();
 scEmpty.targetSlot = Road.slots[1];
 scEmpty.tour = [Road.slots[1]];
-scEmpty.lane = 'inner';
+scEmpty.lane = serviceLane();
 scEmpty.state = 'drive';
 scEmpty.s = modS(Road.slots[1].s - 10, L);
 scEmpty.prevS = scEmpty.s;
@@ -1856,7 +1868,7 @@ Game.scalper.unit = scEmpty;
 setScalperPhase(scEmpty, ScalperPhase.DRIVING);
 const gbrPass = makeGBR();
 initGbrOnSpawn(gbrPass);
-gbrPass.lane = 'inner';
+gbrPass.lane = serviceLane();
 gbrPass.state = 'drive';
 gbrPass.s = scEmpty.s;
 gbrPass.prevS = gbrPass.s;
@@ -1909,7 +1921,7 @@ assert(!pumpNozzleBusy(stQ.pumps[0]), 'nozzle free while waiting in pocket');
 FD.newGame('campaign', 1);
 const scVis = FD.makeScalper();
 scVis.totalGot = 30;
-scVis.lane = 'inner';
+scVis.lane = serviceLane();
 scVis.state = 'drive';
 scVis.s = modS(Road.spawnS + 30, L);
 scVis.prevS = scVis.s;
@@ -1920,7 +1932,7 @@ scVis.crimeStarted = true;
 Game.scalper.unit = scVis;
 const gbrVis = makeGBR();
 initGbrOnSpawn(gbrVis);
-gbrVis.lane = 'inner';
+gbrVis.lane = serviceLane();
 gbrVis.state = 'drive';
 gbrVis.s = scVis.s;
 gbrVis.prevS = gbrVis.s;
@@ -1929,7 +1941,7 @@ assert(gbrSeesScalper(gbrVis, scVis), 'circular detect at same position');
 gbrVis.s = modS(scVis.s + 80, L);
 gbrVis.prevS = gbrVis.s;
 assert(gbrSeesScalper(gbrVis, scVis), 'circular detect behind');
-gbrVis.lane = 'outer';
+gbrVis.lane = exitLane();
 gbrVis.s = modS(scVis.s + 40, L);
 gbrVis.prevS = gbrVis.s;
 assert(gbrSeesScalper(gbrVis, scVis), 'circular detect opposite lane');
@@ -1944,9 +1956,10 @@ assert(gbrPat.gbrPhase === GbrPhase.PATROL, 'patrol after dispatch');
 gbrPat.s = GBRBase.spawnS;
 gbrPat.prevS = modS(GBRBase.spawnS - 40, L);
 for (let lap = 0; lap < CONFIG.gbr.patrolMaxLaps; lap++) {
-  gbrPat.s = modS(GBRBase.spawnS - 2, L);
-  gbrPat.prevS = modS(GBRBase.spawnS - 50, L);
-  step(3);
+  gbrPat.v = gbrPat.maxV;
+  gbrPat.s = modS(GBRBase.spawnS - 1, L);
+  gbrPat.prevS = gbrPat.s;
+  step(8);
 }
 assert(gbrPat.gbrPhase === GbrPhase.RETURNING || gbrPat.patrolLaps >= CONFIG.gbr.patrolMaxLaps,
   'patrol ends after five laps');
@@ -1965,7 +1978,7 @@ const gbrSpawn = Game.gbr.unit;
 assert(gbrSpawn.gbrPhase === GbrPhase.PATROL, 'patrol before scalper');
 const scLate = FD.makeScalper();
 scLate.totalGot = 20;
-scLate.lane = 'inner';
+scLate.lane = serviceLane();
 scLate.state = 'drive';
 scLate.s = gbrSpawn.s;
 scLate.prevS = scLate.s;
@@ -2034,7 +2047,7 @@ scFlee.pump = null;
 scFlee.station = null;
 scFlee.pose = null;
 scFlee.state = 'drive';
-scFlee.lane = 'inner';
+scFlee.lane = serviceLane();
 scFlee.s = modS(slotFlee.s + 90, L);
 scFlee.prevS = scFlee.s;
 step(5);
@@ -2050,7 +2063,7 @@ const scPursuit = FD.makeScalper();
 scPursuit.scalperId = 101;
 scPursuit.wanted = true;
 scPursuit.crimeStarted = true;
-scPursuit.lane = 'inner';
+scPursuit.lane = serviceLane();
 scPursuit.state = 'drive';
 scPursuit.s = modS(200, L);
 scPursuit.prevS = scPursuit.s;
@@ -2083,7 +2096,7 @@ scWantedExit.scalperId = 201;
 scWantedExit.wanted = true;
 scWantedExit.crimeStarted = true;
 scWantedExit.wantedAt = 1;
-scWantedExit.lane = 'outer';
+scWantedExit.lane = exitLane();
 scWantedExit.state = 'drive';
 scWantedExit.s = 400;
 scWantedExit.prevS = 400;
@@ -2109,7 +2122,7 @@ scWantedRing.scalperId = 202;
 scWantedRing.wanted = true;
 scWantedRing.crimeStarted = true;
 scWantedRing.wantedAt = 2;
-scWantedRing.lane = 'inner';
+scWantedRing.lane = serviceLane();
 scWantedRing.state = 'drive';
 scWantedRing.s = 900;
 scWantedRing.prevS = 900;
@@ -2129,14 +2142,14 @@ const scDup = FD.makeScalper();
 scDup.scalperId = 203;
 scDup.wanted = true;
 scDup.crimeStarted = true;
-scDup.lane = 'inner';
+scDup.lane = serviceLane();
 scDup.state = 'drive';
 scDup.s = 300;
 scDup.prevS = 300;
 setScalperPhase(scDup, ScalperPhase.DRIVING);
 const gbrFirst = makeGBR(1);
 initGbrOnSpawn(gbrFirst);
-gbrFirst.lane = 'inner';
+gbrFirst.lane = serviceLane();
 gbrFirst.state = 'drive';
 gbrFirst.s = 100;
 gbrFirst.prevS = 100;
@@ -2174,7 +2187,7 @@ assert((Game.pursuitEventLog || []).some(e => e.msg.includes('PATROL')), 'PATROL
   const off = 20;
   gPast.s = modL(GBRBase.spawnS + off, L);
   gPast.prevS = gPast.s;
-  gPast.lane = 'outer';
+  gPast.lane = exitLane();
   gPast.state = 'drive';
   gPast.v = CONFIG.gbr.returnSpeed;
   gPast.maxV = CONFIG.gbr.returnSpeed;

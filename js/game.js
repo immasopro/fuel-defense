@@ -2,8 +2,8 @@ import { CONFIG } from './config/index.js';
 import { SPAWN_START_INTERVAL } from './config/levels.js';
 import { Game } from './core/gameState.js';
 import { Road } from './world/roadNetwork.js';
-import { updateLane } from './vehicles/vehicle.js';
-import { innerLaneList, outerLaneList, releaseHolderBurst } from './systems/trafficSystem.js';
+import { updateLane, tryYieldToChaseGbr, ensureNumericLane } from './vehicles/vehicle.js';
+import { allLaneLists, releaseHolderBurst } from './systems/trafficSystem.js';
 import { currentDiff, tickSpawnPipeline, scalperCooldown, syncLevelPhase } from './systems/spawnSystem.js';
 import { updateDefeatTimer, checkFuelCrisis, checkLevelComplete } from './systems/defeatSystem.js';
 import { addFloat } from './systems/economySystem.js';
@@ -125,10 +125,13 @@ export function update(dt) {
   const diff = currentDiff();
   const L = Road.length;
 
-  const inner = innerLaneList();
-  const outer = outerLaneList();
-  updateLane(inner, dt);
-  updateLane(outer, dt);
+  for (const v of Game.vehicles) {
+    ensureNumericLane(v);
+    tryYieldToChaseGbr(v, dt);
+  }
+  for (const list of allLaneLists()) {
+    updateLane(list, dt);
+  }
 
   updateTrafficLight(dt);
   tickSpawnPipeline(dt, diff);

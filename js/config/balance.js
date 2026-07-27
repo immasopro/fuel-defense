@@ -15,6 +15,8 @@ export const balance = {
   visual: { pocketDur: 0.75, pullInDur: 0.7, pullOutDur: 0.65 },
 
   road: {
+    /** Число полноценных полос (v0.4.4 = 3; параметр для будущего 4+) */
+    laneCount: 3,
     laneWidth: 15,
     marginX: 46,
     marginTop: 70,
@@ -22,17 +24,20 @@ export const balance = {
     cornerR: 64,
     serviceLat: 30,
     pumpDepth: 14,
+    /** Fallback / UI marking; фактический spacing очереди — по len + safety */
     queueGap: 21,
+    queueSafetyGap: 4,
     stationTankLat: 48,
     approachOffset: 12,
     decelLen: 24,
     accelLen: 20,
     pocketLat: 38,
     pocketGap: 18,
+    pocketSafetyGap: 4,
     pocketDepth: 70,
     pocketGrabDist: 36,
     pocketForceTime: 1.5,
-    apronDepth: 68,
+    apronDepth: 100,
     pullInDist: 14,
     passReleaseDist: 55,
     forcePullInTime: 1.2,
@@ -165,13 +170,19 @@ export const balance = {
      * V → 4с, VIII → 3с, X → 2с. Не влияет на prepDuration.
      */
     departCooldownReductionLevels: [5, 8, 10],
-    /** Приоритетное движение только в CHASE */
+    /** Приоритетное движение только в CHASE (мигалка вкл.) */
     chaseDrive: {
       gapMin: 1.5,
       overtakeTrigger: 90,
       overtakeDur: 1.35,
-      outerAheadPad: 4,
-      outerBehindPad: 8
+      /** Clearance на целевой полосе перед стартом обгона (не баланс скорости) */
+      outerAheadPad: 28,
+      outerBehindPad: 24,
+      /** Доля ширины полосы: ниже — ещё конфликтуем по lat с исходным лидером (COLL-002) */
+      safeLatFrac: 0.55,
+      /** NPC уступает CHASE GBR вправо, если свободно */
+      yieldLookBack: 70,
+      yieldLookAhead: 40
     }
   },
 
@@ -214,12 +225,17 @@ export const balance = {
 
   follow: {
     gapMin: 7,
+    /** Минимальный bumper после soft-snap (COLL-001): лидер не теряется */
+    bumperFloor: 0.75,
     gapK: 1.6,
     reactMin: 0.28,
     reactMax: 0.55,
     emergencyGap: 12,
     overtakeTrigger: 22,
-    overtakeDur: 2.8
+    overtakeDur: 2.8,
+    /** Макс. перемещение за tick (доля len) — anti-tunnel / anti stall-jump */
+    maxStepLenFrac: 0.45,
+    laneChangeDur: 1.1
   },
 
   ui: { tapRadius: 48, tankLabelTime: 3 }

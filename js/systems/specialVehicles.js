@@ -1,6 +1,7 @@
 import { CONFIG } from '../config/index.js';
 import { Game } from '../core/gameState.js';
 import { Road, approachStopS, apronPoseForRank, distAhead, distNearStop } from '../world/roadNetwork.js';
+import { serviceLane, exitLane, laneLat, normalizeLane } from '../world/lanes.js';
 import { GBRBase } from '../world/map.js';
 import { mod, rand } from '../core/utils.js';
 import { makeScalper, makeBgCar } from '../vehicles/vehicleFactory.js';
@@ -265,7 +266,7 @@ function scalperOnColumn(sc) {
 
 /** Дорожное преследование: та же полоса, сближение до дистанции ареста. */
 function applyRoadChasePursuit(g, target, L) {
-  g.lane = target.lane || g.lane || 'inner';
+  g.lane = normalizeLane(target.lane ?? g.lane ?? serviceLane());
   g.maxV = Math.max(gbrPatrolSpeed(), CONFIG.scalper.exitSpeed + 10);
   g.stopS = mod(target.s, L);
 }
@@ -273,15 +274,10 @@ function applyRoadChasePursuit(g, target, L) {
 
 
 function vehicleWorldPos(v) {
-
   if (v.pose) return { x: v.pose.x, y: v.pose.y };
-
-  const lat = v.lane === 'inner' ? Road.laneW / 2 : -Road.laneW / 2;
-
-  const p = Road.posAt(v.s, lat + (v.latOff || 0));
-
+  const lat = laneLat(normalizeLane(v.lane)) + (v.latOff || 0);
+  const p = Road.posAt(v.s, lat);
   return { x: p.x, y: p.y };
-
 }
 
 
@@ -361,7 +357,7 @@ function resumeGbrChase(g, L, reason) {
     g.prevS = g.s;
     g.pose = null;
     g.state = 'drive';
-    g.lane = g.lane || 'inner';
+    g.lane = normalizeLane(g.lane ?? serviceLane());
     g.animT = 0;
     g.animFrom = null;
     g.animTo = null;
@@ -407,7 +403,7 @@ function beginGbrPullIn(g, sc) {
 
   g.animDur = CONFIG.visual.pullInDur + sc.pumpJ * 0.06;
 
-  const lat = Road.laneW / 2 + (g.latOff || 0);
+  const lat = laneLat(serviceLane()) + (g.latOff || 0);
 
   g.animFrom = Road.posAt(g.s, lat);
 
@@ -518,9 +514,9 @@ function beginGbrReturn(g, slot, pumpJ, L) {
     g.state = 'pullOut';
     g.animT = 0;
     g.animDur = CONFIG.visual.pullOutDur + pumpJ * 0.06;
-    g.animFrom = { ...(g.pose || Road.posAt(g.s, Road.laneW / 2)) };
+    g.animFrom = { ...(g.pose || Road.posAt(g.s, laneLat(serviceLane()))) };
     const mergeS = mod(slot.s + 16, L);
-    g.animTo = Road.posAt(mergeS, -Road.laneW / 2);
+    g.animTo = Road.posAt(mergeS, laneLat(exitLane()));
     g.exitS = mergeS;
   } else {
     g.state = 'drive';
@@ -573,7 +569,7 @@ function finishArrest(g, sc, L) {
     sc.stationExitActive = false;
     if (!isScalperLeavingMap(sc)) {
       SA.cleanupVehicleStationLinks(sc);
-      sc.lane = 'outer';
+      sc.lane = exitLane();
       sc.scalperLeavingMap = true;
       sc.scalperExitT = 0;
       sc.scalperExitStallT = 0;
@@ -601,7 +597,7 @@ function onGbrReturnPullOutComplete(g, L) {
 
   g.returnPullOut = false;
 
-  g.lane = 'outer';
+  g.lane = exitLane();
 
   g.state = 'drive';
 
@@ -717,7 +713,7 @@ function updateGBR(g, dt, L, removeSet) {
       SA.releaseColumn(g);
       g.pose = null;
       g.state = 'drive';
-      g.lane = g.lane || 'inner';
+      g.lane = normalizeLane(g.lane ?? serviceLane());
       releaseGbrTarget(g, { reason: 'despawn' });
       setGbrPhase(g, GbrPhase.PATROL);
       g.stopS = null;

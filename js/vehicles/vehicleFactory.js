@@ -9,6 +9,7 @@ import { gbrPatrolSpeed } from '../systems/gbrLogistics.js';
 import { TankerPhase } from '../systems/entityFsm.js';
 import { rand, weightedPick, lerp } from '../core/utils.js';
 import { baseVehicle } from './vehicle.js';
+import { serviceLane } from '../world/lanes.js';
 
 function rollCanister(typeKey) {
   if (Math.random() >= CONFIG.canister.prob) return null;
@@ -98,7 +99,7 @@ function makeGBR(fleetId) {
   const C = CONFIG.gbr;
   const speed = gbrPatrolSpeed();
   return baseVehicle('gbr', {
-    lane: 'inner', len: C.len, w: 10, maxV: speed, accel: C.accel, brake: C.brake,
+    lane: serviceLane(), len: C.len, w: 10, maxV: speed, accel: C.accel, brake: C.brake,
     v: speed * .4, react: .08,
     target: null, towT: 0, towTotal: C.towTime, towProgress: 0,
     fleetId: fleetId || null, targetScalperId: null, chaseTarget: null

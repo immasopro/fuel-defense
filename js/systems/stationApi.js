@@ -161,7 +161,7 @@ function repositionPocket(st) {
 
     if (car.state === 'pocket' && car.pose && car.animT >= car.animDur)
 
-      car.pose = pocketPoseForRank(st.slot, i);
+      car.pose = pocketPoseForRank(st.slot, i, st.pocket);
 
   }
 
@@ -252,7 +252,7 @@ function promotePocket(st, slot) {
 
     v.animFrom = { ...v.pose };
 
-    v.animTo = apronPoseForRank(slot, bestJ, pumpRank(st.pumps[bestJ], v));
+    v.animTo = apronPoseForRank(slot, bestJ, pumpRank(st.pumps[bestJ], v), st.pumps[bestJ].cars);
 
     v.v = 0;
 

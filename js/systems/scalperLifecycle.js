@@ -10,8 +10,9 @@ import { mod } from '../core/utils.js';
 import { ScalperPhase, setScalperPhase } from './entityFsm.js';
 import { StationApi } from './stationApi.js';
 import { logPursuitEvent, clearScalperWanted } from './gbrPursuit.js';
-import { outerLaneList } from './trafficSystem.js';
+import { laneList } from './trafficSystem.js';
 import { commitScalperEscapeTheft } from './economySystem.js';
+import { exitLane, normalizeLane, serviceLane, laneLat } from '../world/lanes.js';
 
 export const ScalperOwner = {
   SPECIAL: 'special',
@@ -27,9 +28,10 @@ export function isScalperLeavingMap(sc) {
 
 export function isVehicleInUpdateLane(v) {
   if (!v || isScalperLeavingMap(v)) return false;
-  if (v.lane === 'outer') return v.state === 'drive';
-  if (v.lane === 'inner') return v.state === 'drive' || v.state === 'action' || v.state === 'tow';
-  return false;
+  const lane = normalizeLane(v.lane);
+  if (lane === exitLane()) return v.state === 'drive';
+  if (lane === serviceLane()) return v.state === 'drive' || v.state === 'action' || v.state === 'tow';
+  return v.state === 'drive';
 }
 
 function scalperInAnyStationList(sc) {
@@ -57,8 +59,13 @@ function beginScalperLeavingMap(sc) {
   sc.scalperExitStallT = 0;
   sc.stopS = null;
   sc.state = 'drive';
-  sc.lane = 'outer';
+  sc.lane = exitLane();
+  sc.maxV = CONFIG.scalper.exitSpeed;
+  sc.v = Math.min(sc.v || 0, CONFIG.scalper.exitSpeed);
   sc.pose = null;
+  sc.latOff = 0;
+  sc.overtake = null;
+  sc.laneChange = null;
   sc.tour = [];
   sc.tourIdx = 0;
   sc.pump = null;
@@ -82,47 +89,25 @@ export function despawnScalper(sc, removeSet) {
 }
 
 /**
- * Автономное движение EXITING-перекупов — вне updateLane.
- * Гарантированный прогресс; не зависит от crossed(), лидеров, stopS.
+ * EXITING: движение через updateLane (не ghost).
+ * Здесь только despawn по прибытию/таймауту — без teleport stall-jump (COLL-004).
  */
 export function updateScalpersLeavingMap(dt, L, removeSet) {
   const C = CONFIG.scalper;
-  const exitSpeed = C.exitSpeed;
   const arrive = C.exitArriveDist;
   const maxT = C.exitMaxTime;
-  const stallMax = C.exitStallMax;
-  const minStep = C.exitMinStep;
 
   for (const sc of Game.vehicles) {
     if (!isScalperLeavingMap(sc)) continue;
 
     sc.scalperExitT = (sc.scalperExitT || 0) + dt;
+    sc.lane = exitLane();
+    sc.maxV = C.exitSpeed;
+    sc.state = 'drive';
+    sc.stopS = null;
 
     const distToExit = distAheadOnRing(sc.s, Road.spawnS, L);
     if (distToExit < arrive || sc.scalperExitT >= maxT) {
-      despawnScalper(sc, removeSet);
-      continue;
-    }
-
-    const prevS = sc.s;
-    sc.prevS = prevS;
-    const step = Math.max(exitSpeed * dt, minStep * dt);
-    sc.s = mod(sc.s + step, L);
-    sc.v = exitSpeed;
-
-    const ds = mod(sc.s - prevS, L);
-    if (ds < 0.5 * dt) {
-      sc.scalperExitStallT = (sc.scalperExitStallT || 0) + dt;
-      if (sc.scalperExitStallT >= stallMax) {
-        const jump = Math.max(step * 2, distToExit * 0.35);
-        sc.s = mod(sc.s + jump, L);
-        sc.scalperExitStallT = 0;
-      }
-    } else {
-      sc.scalperExitStallT = 0;
-    }
-
-    if (distAheadOnRing(sc.s, Road.spawnS, L) < arrive) {
       despawnScalper(sc, removeSet);
     }
   }
@@ -143,8 +128,8 @@ export function assertRoadHandoffInvariants(sc, context) {
   if (sc.stopS != null) {
     violations.push('stopS must be null during EXITING (got ' + sc.stopS + ')');
   }
-  if (outerLaneList().includes(sc)) {
-    violations.push('EXITING scalper must not be in outerLaneList');
+  if (normalizeLane(sc.lane) !== exitLane()) {
+    violations.push('EXITING scalper must be on exit lane (got ' + sc.lane + ')');
   }
   if (scalperInAnyStationList(sc)) {
     violations.push('still referenced in station lists');
@@ -297,9 +282,9 @@ export function beginStationExit(sc, reason, opts) {
     sc.state = 'pullOut';
     sc.animT = 0;
     sc.animDur = CONFIG.visual.pullOutDur + pumpJ * 0.06;
-    sc.animFrom = { ...(sc.pose || Road.posAt(sc.s, Road.laneW / 2)) };
+    sc.animFrom = { ...(sc.pose || Road.posAt(sc.s, laneLat(serviceLane()))) };
     const mergeS = mod(slot.s + 16, Road.length);
-    sc.animTo = Road.posAt(mergeS, -Road.laneW / 2);
+    sc.animTo = Road.posAt(mergeS, laneLat(exitLane()));
     sc.exitS = mergeS;
     sc.targetSlot = slot;
     return true;

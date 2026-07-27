@@ -239,3 +239,37 @@ ES module live bindings resolve these at call time (no top-level circular init).
 ## Module assignment summary
 
 See task spec: traffic/spawn/defeat/economy/upgrade/station systems and stationQueue function lists match `gamechunk.js` extraction.
+
+---
+
+## 0.4.4 — Three lanes + collision/follow overhaul (2026-07-27)
+
+### Goals
+1. Road model: **3 full traffic lanes** from level 1 (`CONFIG.laneCount = 3`, configurable for future 4+).
+2. Fix QA 0.4.3.3 CRITICAL/HIGH collision issues without changing economy/spawn/win gates.
+
+### Lane model
+- New `js/world/lanes.js`: `laneCount()`, `laneLat(i)`, `serviceLane()` (=0, AZS approach), `exitLane()` (=N-1), legacy `'inner'|'outer'` normalize.
+- Vehicles store numeric `lane` (0..N-1). `laneList(i)` / `allLaneLists()` / `updateAllLanes(dt)`.
+- Tanker/GBR spawn on `serviceLane()`; random NPC/Scalper pick any free lane via `spawnClear`.
+- **No 4th lane** in this patch. Third lane is not a GBR-only lane.
+
+### Collision / follow fixes
+- **COLL-001:** `findForwardLeader` accepts bumper-boundary leaders (`g >= -0.05`, not `g > 0`). Soft-snap parks at `CONFIG.bumperFloor` (0.75).
+- **COLL-002:** Soft-fix uses **lateral conflict** (`|effectiveLat(a)-effectiveLat(b)| < safeLat`). Step clamped by lateral forward gap so large dt cannot tunnel. Overtake commits to adjacent lane only if clear (`canCommitOvertakeLane`).
+- **Step clamp:** per-tick `|Δs|` capped by `vehicle.len * CONFIG.maxStepLenFrac` and by remaining bumper gap to lateral leader.
+- **EXITING Scalper:** remains in `laneList` while on map (no collision ghost). `updateScalpersLeavingMap` only despawns past `S_END`; motion uses `updateLane`.
+- **Queue/pocket:** spacing `(lenA+lenB)/2 + safetyGap` via `apronPoseForRank` / `pocketPoseForRank` (replaces fixed 21 / 18).
+- Chase overtake pads (`outerAheadPad`/`outerBehindPad`) tightened so GBR does not start an overtake into an occupied lane.
+
+### GBR priority
+- Siren / yield only in **CHASE** (`hasSiren(v)`). PATROL/RETURNING: normal traffic, no yield request.
+- NPC yield: if chase GBR behind with trajectory conflict and right lane free → `beginLaneShift` right.
+- Dense three-abreast still physically blocks GBR (soft-fix + no tunnel).
+
+### Unchanged (regression fence)
+spawnedCars / servedCars / targetCars, DRAINING, fuel crisis, economy, spawn rates, GBR/Scalper balance numbers.
+
+### Debug
+Overlay shows lane, latOff, overtake, bumper, gap, siren, chase phase/target, Scalper EXITING/owner/station; on-car lane digit.
+
