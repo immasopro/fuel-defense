@@ -3,6 +3,7 @@ import { mod } from '../core/utils.js';
 import { Road, pumpPose, apronPoseForRank, approachStopS, pocketEntryS,
   pocketPoseForRank, distAhead } from '../world/roadNetwork.js';
 import { StationApi as SA } from '../systems/stationApi.js';
+import { restoreScalperToTour } from '../systems/scalperLifecycle.js';
 
 const repositionPocket = SA.repositionPocket;
 
@@ -26,6 +27,11 @@ function releasePocket(v) {
   v.targetSlot = null;
   v.stopS = null;
   v.pocketWaitT = 0;
+  v.pocketApproachT = 0;
+  // D-SPAWN-002: Scalper не остаётся в QUEUE/OWNER:STATION после срыва заезда
+  if (v.kind === 'scalper') {
+    restoreScalperToTour(v, 'release_pocket');
+  }
 }
 
 function promotePocket(st) {

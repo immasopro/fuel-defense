@@ -2,6 +2,8 @@ export const Game = {
   state: 'menu',
   mode: 'campaign', levelIdx: 1, modeCfg: null,
   money: 0, bonuses: 0, time: 0,
+  timeScale: 1,
+  speedBoost: null,
   depot: { level: 1, res: 1500, cap: 1500 },
   tankerTruck: { level: 1 },
   fleet: { level: 1 },
@@ -16,7 +18,7 @@ export const Game = {
   pursuitEventLog: [],
   scalper: { unit: null },
   scalperEvolution: null,
-  stats: { served: 0, earned: 0, liters: 0, stolenLiters: 0, stolenDamage: 0 },
+  stats: { served: 0, spawned: 0, earned: 0, liters: 0, stolenLiters: 0, stolenDamage: 0 },
   tankLabels: {},   // slot.i → seconds left showing "XXXX / YYYY л"
   depotLabel: 0,
   paused: false,

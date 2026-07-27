@@ -11,6 +11,7 @@ import { distributeDepotFuel } from './stations/reservoir.js';
 import { tickSpecialSpawns, updateVehicles, postStationMaintenance } from './systems/stationSystem.js';
 import { initLogistics, tickTankerLogistics } from './systems/tankerLogistics.js';
 import { initGbrLogistics, tickGbrLogistics } from './systems/gbrLogistics.js';
+import { initSpeedBoost } from './systems/speedBoost.js';
 import { initScalperEvolution } from './systems/scalperEvolution.js';
 import { resetPursuitState, tickGbrPursuit } from './systems/gbrPursuit.js';
 import { resetScalperLifecycleState } from './systems/scalperLifecycle.js';
@@ -18,6 +19,7 @@ import { tickVersionCheck } from './systems/versionCheck.js';
 import { updateHUD } from './ui/hud.js';
 import { updatePanelLive, closePanel } from './ui/stationPanel.js';
 import { UI } from './ui/hud.js';
+import { clearRunEconomy, saveRunEconomy } from './systems/runEconomySave.js';
 
 export function newGame(mode, levelIdx) {
   Game.mode = mode;
@@ -27,6 +29,7 @@ export function newGame(mode, levelIdx) {
   Game.money = Game.modeCfg.startMoney;
   Game.bonuses = 0;
   Game.time = 0;
+  initSpeedBoost();
   Game.depot = { level: 1, res: CONFIG.depot.levels[0], cap: CONFIG.depot.levels[0] };
   Game.vehicles = [];
   Game.holder = [];
@@ -48,7 +51,7 @@ export function newGame(mode, levelIdx) {
   resetPursuitState();
   resetScalperLifecycleState();
   Game.scalper = { unit: null };
-  Game.stats = { served: 0, earned: 0, liters: 0, stolenLiters: 0, stolenDamage: 0 };
+  Game.stats = { served: 0, spawned: 0, earned: 0, liters: 0, stolenLiters: 0, stolenDamage: 0 };
   Game.tankLabels = {};
   Game.depotLabel = 0;
   Game.bgSpawnTimer = 0;
@@ -68,7 +71,9 @@ export function restartCurrentLevel() {
   closePanel();
   if (UI.screenEnd) UI.screenEnd.classList.add('hidden');
   if (UI.warning) UI.warning.classList.add('hidden');
+  clearRunEconomy();
   newGame(mode, levelIdx);
+  saveRunEconomy();
   updateHUD();
 }
 
