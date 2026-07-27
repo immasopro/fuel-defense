@@ -73,6 +73,7 @@ function makeScalper() {
     len: C.len, w: 10, maxV: C.speed, accel: C.accel, brake: C.brake, v: C.speed * .4,
     tour, tourIdx: 0, totalGot: 0, maxLiters,
     targetSlot: null, pump: null, pumpJ: 0, waitReserve: false,
+    isScalper: true,
     scalperId: null, wanted: false, pursuedBy: null, alarmStationId: null, crimeStarted: false,
     scalperOwner: 'special', stationExitActive: false, stationExitReason: null
   });

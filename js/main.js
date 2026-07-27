@@ -9,6 +9,7 @@ import { update, newGame } from './game.js';
 import { draw } from './ui/renderer.js';
 import { boot, Boot } from './boot.js';
 import { callTanker, callGBR } from './systems/spawnSystem.js';
+import { tickSpeedBoost, addSpeedBoostTime, toggleSpeedBoost } from './systems/speedBoost.js';
 import { endGame } from './systems/defeatSystem.js';
 import { makeCar, makeBgCar, makeScalper, makeTanker, pickClientType, pickClientFuel } from './vehicles/vehicleFactory.js';
 import { finishFuel } from './systems/economySystem.js';
@@ -40,6 +41,7 @@ export const FD = {
   actionAddPump, actionBuyCanisterReserve, actionUpgradeDepot,
   resUpgradeCost, pumpUpgradeCost, fuelUnlockCost, addPumpCost, sortedStationSlots,
   forceTankerReadyForTests, forceGbrReadyForTests,
+  addSpeedBoostTime, toggleSpeedBoost,
   wakePumpQueue, tryApproachPullIn, tryApproachPocket, apronPoseForRank, approachStopS,
   pocketEntryS, decelStopS, pocketPoseForRank, holderPose, promotePocket,
   distAhead, distNearStop, tankerTechStopS, tankerCommitS, tankerDecisionS, tankerTechPose,
@@ -54,8 +56,13 @@ if (typeof window !== 'undefined') window.FD = FD;
 
 const timer = new FrameTimer();
 function frame(ts) {
-  const dt = timer.step(ts);
-  update(dt);
+  const realDt = timer.step(ts);
+  // Лимит 2x считается по реальному времени; симуляция — через timeScale.
+  if (Game.state === 'play' && !Game.paused) {
+    tickSpeedBoost(realDt);
+  }
+  const scale = Game.timeScale || 1;
+  update(realDt * scale);
   draw();
   requestAnimationFrame(frame);
 }

@@ -215,6 +215,41 @@ export function initScalperLifecycle(sc) {
   sc.scalperLeavingMap = false;
   sc.scalperExitT = 0;
   sc.scalperExitStallT = 0;
+  sc.pocketApproachT = 0;
+  sc.pocketWaitT = 0;
+}
+
+/**
+ * Вернуть Scalper в штатный тур после срыва заезда/очереди (D-SPAWN-002).
+ * Не трогает ARRESTING / EXITING / ESCAPING / DESPAWN.
+ */
+export function restoreScalperToTour(sc, tag) {
+  if (!sc || sc.kind !== 'scalper') return false;
+  if (isScalperLeavingMap(sc)) return false;
+  const phase = sc.scalperPhase;
+  if (phase === ScalperPhase.ARRESTING ||
+      phase === ScalperPhase.ESCAPING ||
+      phase === ScalperPhase.EXITING ||
+      phase === ScalperPhase.DESPAWN) {
+    return false;
+  }
+  sc.targetSlot = null;
+  sc.stopS = null;
+  sc.pocketWaitT = 0;
+  sc.pocketApproachT = 0;
+  sc.approachWait = 0;
+  if (sc.state === 'pocket' || sc.state === 'pullIn') {
+    sc.state = 'drive';
+    sc.pose = null;
+    sc.animT = 0;
+    sc.v = Math.max(sc.v || 0, sc.maxV * 0.35);
+  } else if (sc.state !== 'drive') {
+    sc.state = 'drive';
+    sc.pose = null;
+  }
+  transferScalperOwner(sc, ScalperOwner.SPECIAL, tag || 'restore_tour');
+  setScalperPhase(sc, ScalperPhase.DRIVING);
+  return true;
 }
 
 export function isStationExitActive(sc) {
