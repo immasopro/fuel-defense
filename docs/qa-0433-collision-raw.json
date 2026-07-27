@@ -1,0 +1,748 @@
+{
+  "version": "0.4.3.3",
+  "generatedAt": "2026-07-27T12:44:14.320Z",
+  "dims": [
+    {
+      "type": "sedan",
+      "logical": {
+        "len": 19,
+        "w": 9,
+        "maxV": 78
+      },
+      "visual": "rr(-len/2,-w/2,len,w)",
+      "collision": "1D bumper len only"
+    },
+    {
+      "type": "suv",
+      "logical": {
+        "len": 23,
+        "w": 10,
+        "maxV": 64
+      },
+      "visual": "same as logical",
+      "collision": "1D bumper len only"
+    },
+    {
+      "type": "truck",
+      "logical": {
+        "len": 36,
+        "w": 11,
+        "maxV": 46
+      },
+      "visual": "same + cab seam",
+      "collision": "1D bumper len only"
+    },
+    {
+      "type": "scalper",
+      "logical": {
+        "len": 23,
+        "w": 10,
+        "maxV": 64
+      },
+      "visual": "same as logical",
+      "collision": "1D bumper + Euclidean arrest vs GBR"
+    },
+    {
+      "type": "gbr",
+      "logical": {
+        "len": 22,
+        "w": 10,
+        "maxV": 100
+      },
+      "visual": "same + light bar (+3px above)",
+      "collision": "1D bumper + Euclidean arrestDist"
+    },
+    {
+      "type": "tanker",
+      "logical": {
+        "len": 40,
+        "w": 12,
+        "maxV": 52
+      },
+      "visual": "cab 10 + tank len-12",
+      "collision": "1D bumper len only"
+    },
+    {
+      "type": "bg",
+      "logical": {
+        "len": 19,
+        "w": 9
+      },
+      "visual": "same",
+      "collision": "1D bumper"
+    }
+  ],
+  "findings": [
+    {
+      "id": "DIM-01",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Sprite == logical len×w for all kinds; NO separate AABB hitbox. Follow gap uses (lenA+lenB)/2."
+    },
+    {
+      "id": "DIM-02",
+      "severity": "LOW",
+      "ok": true,
+      "detail": "Scalper w=10 hardcoded in factory (balance has len only)."
+    },
+    {
+      "id": "DIM-03",
+      "severity": "LOW",
+      "ok": true,
+      "detail": "GBR w=10 hardcoded; balance.len=22. Light bar drawn outside body (±w/2-1)."
+    },
+    {
+      "id": "DIM-04",
+      "severity": "LOW",
+      "ok": true,
+      "detail": "Tanker w=12 hardcoded; visual cab+tank still uses same w."
+    },
+    {
+      "id": "DIM-05",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Safety gap: civilian gapMin=7; chase GBR gapMin=1.5; arrestDist=22."
+    },
+    {
+      "id": "DIM-06",
+      "severity": "MEDIUM",
+      "ok": true,
+      "detail": "No width (w) used in collision — only len. Lateral latOff / lane ignored by bumper math."
+    },
+    {
+      "id": "ARCH-01",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Collision detection: NONE (no AABB/circle pairwise). Soft bumper resolution after move in updateLane."
+    },
+    {
+      "id": "ARCH-02",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Collision avoidance: IDM-like follow — vt from percGap/percLV; reaction delay; emergencyGap=12."
+    },
+    {
+      "id": "ARCH-03",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Tick order: updateLane(inner/outer) THEN updateVehicles. Soft fix uses post-move s. maxDt=0.05s."
+    },
+    {
+      "id": "ARCH-04",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Lane lists: inner=drive|action|tow; outer=drive && !(scalper EXITING). Station/pocket/pullIn/block/waitMerge OUT of collision."
+    },
+    {
+      "id": "ARCH-05",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "GBR↔Scalper catch = Euclidean world dist ≤ 22 (not bumper). Vision=500."
+    },
+    {
+      "id": "TUN-NPC-01",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "NPC: beforeGap=3.00 afterGap=0.00 dsA=0.00 wasBehind=true nowAhead=false softSnap=true",
+      "before": 3,
+      "after": 0,
+      "dt": 0.05,
+      "vA": 78,
+      "vB": 0
+    },
+    {
+      "id": "TUN-SC-01",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Scalper: beforeGap=3.00 afterGap=0.05 dsA=2.95 wasBehind=true nowAhead=false softSnap=true",
+      "before": 3,
+      "after": 0.049999999999954525,
+      "dt": 0.05,
+      "vA": 64,
+      "vB": 0
+    },
+    {
+      "id": "TUN-GBR-01",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "GBR: beforeGap=3.00 afterGap=0.00 dsA=0.00 wasBehind=true nowAhead=false softSnap=true",
+      "before": 3,
+      "after": 0,
+      "dt": 0.05,
+      "vA": 150,
+      "vB": 0
+    },
+    {
+      "id": "TUN-GBR-02",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "GBR-largeDt: beforeGap=3.00 afterGap=0.00 dsA=0.00 wasBehind=true nowAhead=false softSnap=true",
+      "before": 3,
+      "after": 0,
+      "dt": 0.2,
+      "vA": 150,
+      "vB": 0
+    },
+    {
+      "id": "TUN-GBR-03",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "GBR-hugeDt: beforeGap=3.00 afterGap=1727.12 dsA=30.00 wasBehind=true nowAhead=false softSnap=true",
+      "before": 3,
+      "after": 1727.1238596594935,
+      "dt": 0.5,
+      "vA": 150,
+      "vB": 0
+    },
+    {
+      "id": "TUN-OVR-01",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "Chase GBR overtake pass intentionally allows s-space pass-through (soft fix off). beforeGap=19.5 passed=true latOff=0.0. Visual: cars offset laterally; bumper overlap in s is BY DESIGN during overtake.",
+      "passed": true,
+      "beforeGap": 19.5
+    },
+    {
+      "id": "MAT-CHASE-PRESS",
+      "severity": "CRITICAL",
+      "ok": false,
+      "detail": "Chase GBR vs civilian: minBumperGap=-18.50 pressedIntoNegative=true. Overtake disables soft-fix → deep s-overlap while latOff incomplete (COLL-002).",
+      "minG": -18.5,
+      "pressed": true
+    },
+    {
+      "id": "COLL-001",
+      "severity": "CRITICAL",
+      "ok": false,
+      "detail": "findForwardLeader requires g>0: after soft-snap gap≤0 leader lost → tunnel. lostLeader=true tunneled=true",
+      "lostLeader": true,
+      "tunneled": true
+    },
+    {
+      "id": "GBR-SC-01",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "20 chase sims: passThrough=0/20 sOverlap>0.5=0/20 reachedArrestDist=0/20. (Note: arrest logic not fully run here — only updateLane follow; Euclidean catch is separate.)",
+      "passThrough": 0,
+      "overlappedS": 0,
+      "arrested": 0,
+      "sample": [
+        {
+          "run": 0,
+          "maxOverlap": 0,
+          "minEuclid": 22.536149022530964,
+          "didPass": false
+        },
+        {
+          "run": 1,
+          "maxOverlap": 0,
+          "minEuclid": 22.536149022530964,
+          "didPass": false
+        },
+        {
+          "run": 2,
+          "maxOverlap": 0,
+          "minEuclid": 22.536149022530964,
+          "didPass": false
+        }
+      ]
+    },
+    {
+      "id": "GBR-SC-02",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "At bumper-aligned spacing: euclid≈22.5 arrestDist=22 bumperGap=0.00. Arrest uses Euclidean only — can fire slightly before/after bumper contact depending on lane curvature/latOff."
+    },
+    {
+      "id": "GBR-SC-EXIT-01",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "EXITING scalper excluded from outerLaneList (inList=false). Autonomous exit motion; bumperOverlapWithStoppedOuter=true. Traffic ignores EXITING scalper → visual pass-through EXPECTED.",
+      "inOuter": false,
+      "crossed": true
+    },
+    {
+      "id": "FAIL-EXIT-GHOST",
+      "severity": "HIGH",
+      "ok": false,
+      "detail": "EXITING Scalper does not participate in lane collision; can visually pass through outer cars / be passed through."
+    },
+    {
+      "id": "QUEUE-01",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Apron rank Euclidean spacing min=21.0 (queueGap=21). Pose-based, not bumper collision."
+    },
+    {
+      "id": "QUEUE-02",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Pocket rank spacing min=18.0 (pocketGap=18)."
+    },
+    {
+      "id": "QUEUE-03",
+      "severity": "MEDIUM",
+      "ok": false,
+      "detail": "queueGap=21 < truck.len=36 → long vehicles in apron ranks can visually overlap if truck in queue.",
+      "qGap": 21,
+      "truckLen": 36,
+      "sedanLen": 19
+    },
+    {
+      "id": "QUEUE-04",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Queued cars (state station/pocket/block) are OUT of updateLane lists — no bumper soft-fix between queue and ring traffic."
+    },
+    {
+      "id": "LANE-01",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Overtake is visual latOff only — vehicle stays in same lane list; soft bumper disabled while overtake!=null."
+    },
+    {
+      "id": "LANE-02",
+      "severity": "HIGH",
+      "ok": false,
+      "detail": "During overtake pass phase, follower s can advance past leader → intentional s-overlap with lateral offset. Meets FAIL criterion \"partial intersection\" if judged visually."
+    },
+    {
+      "id": "LANE-03",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "laneGapFree pads ahead+10 behind+26. free@100=false blocked@115=false."
+    },
+    {
+      "id": "SPAWN-01",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "spawnClear blocks when vehicle near spawnS (pad -4/+12). clear=false."
+    },
+    {
+      "id": "SPAWN-02",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "spawnClear true when ring clear at spawn."
+    },
+    {
+      "id": "DESPAWN-01",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "despawnScalper adds to removeSet and clears Game.scalper.unit; actual array filter happens end of updateVehicles."
+    },
+    {
+      "id": "DESPAWN-02",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Until removeSet applied, object may still be in Game.vehicles for same tick — then filtered. Next tick gone from lane lists."
+    },
+    {
+      "id": "EXIT-JUMP-01",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "EXITING stall recovery can jump max(step*2, dist*0.35) — example jump≈35.0 units in one tick (> scalper.len=23). Potential tunneling vs ignored outer traffic.",
+      "step": 2.75,
+      "jump": 35
+    },
+    {
+      "id": "ARREST-01",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "startArrest: Scalper→ARRESTING/block v=0; GBR→ARREST v=0; towTime countdown. Not bumper-based."
+    },
+    {
+      "id": "ARREST-02",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Assigned chase target is never overtaked by GBR (canStartOvertake gate). Soft bumper applies normally to target."
+    },
+    {
+      "id": "DENS-01",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Dense 12 cars dt=1/60: overlapEvents=0 maxDepth=0.00"
+    },
+    {
+      "id": "DENS-02",
+      "severity": "HIGH",
+      "ok": false,
+      "detail": "Dense 12 cars dt=0.05: overlapEvents=42 maxDepth=20.96"
+    },
+    {
+      "id": "FPS-01",
+      "severity": "HIGH",
+      "ok": false,
+      "detail": "FPS sensitivity: depth@60fps=0.00 vs @20fps(clamp)=20.96"
+    },
+    {
+      "id": "FPS-02",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "If dt=0.2 leaked (no clamp): overlaps=0 depth=0.00. Production clamps to 0.05s — safe unless clamp bypassed."
+    }
+  ],
+  "matrix": [
+    {
+      "pair": "NPC→NPC",
+      "scenario": "A same speed",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "NPC→NPC",
+      "scenario": "B faster follower",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "NPC→NPC",
+      "scenario": "D leader stopped",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "NPC→NPC",
+      "scenario": "E both stopped",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "NPC→Scalper",
+      "scenario": "A same speed",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "NPC→Scalper",
+      "scenario": "B faster follower",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "NPC→Scalper",
+      "scenario": "D leader stopped",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "NPC→Scalper",
+      "scenario": "E both stopped",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "Scalper→NPC",
+      "scenario": "A same speed",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "Scalper→NPC",
+      "scenario": "B faster follower",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "Scalper→NPC",
+      "scenario": "D leader stopped",
+      "ok": false,
+      "detail": "bumper overlap depth=22.38"
+    },
+    {
+      "pair": "Scalper→NPC",
+      "scenario": "E both stopped",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "Scalper→Scalper",
+      "scenario": "A same speed",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "Scalper→Scalper",
+      "scenario": "B faster follower",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "Scalper→Scalper",
+      "scenario": "D leader stopped",
+      "ok": false,
+      "detail": "bumper overlap depth=22.38"
+    },
+    {
+      "pair": "Scalper→Scalper",
+      "scenario": "E both stopped",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "GBR→NPC",
+      "scenario": "A same speed",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "GBR→NPC",
+      "scenario": "B faster follower",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "GBR→NPC",
+      "scenario": "D leader stopped",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "GBR→NPC",
+      "scenario": "E both stopped",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "GBR→Scalper",
+      "scenario": "A same speed",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "GBR→Scalper",
+      "scenario": "B faster follower",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "GBR→Scalper",
+      "scenario": "D leader stopped",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "GBR→Scalper",
+      "scenario": "E both stopped",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "NPC→GBR",
+      "scenario": "A same speed",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "NPC→GBR",
+      "scenario": "B faster follower",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "NPC→GBR",
+      "scenario": "D leader stopped",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "NPC→GBR",
+      "scenario": "E both stopped",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "Scalper→GBR",
+      "scenario": "A same speed",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "Scalper→GBR",
+      "scenario": "B faster follower",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "Scalper→GBR",
+      "scenario": "D leader stopped",
+      "ok": false,
+      "detail": "bumper overlap depth=21.22"
+    },
+    {
+      "pair": "Scalper→GBR",
+      "scenario": "E both stopped",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "GBR→GBR",
+      "scenario": "A same speed",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "GBR→GBR",
+      "scenario": "B faster follower",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "GBR→GBR",
+      "scenario": "D leader stopped",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "GBR→GBR",
+      "scenario": "E both stopped",
+      "ok": true,
+      "detail": "no deep bumper overlap"
+    },
+    {
+      "pair": "GBR→NPC",
+      "scenario": "chase press",
+      "ok": false,
+      "detail": "minGap=-18.50"
+    },
+    {
+      "pair": "Scalper→NPC",
+      "scenario": "D leader stopped (COLL-001)",
+      "ok": false,
+      "detail": "tunneled after leader loss"
+    }
+  ],
+  "gbrScRuns": [
+    {
+      "run": 0,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 1,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 2,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 3,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 4,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 5,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 6,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 7,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 8,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 9,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 10,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 11,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 12,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 13,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 14,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 15,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 16,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 17,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 18,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    },
+    {
+      "run": 19,
+      "maxOverlap": 0,
+      "minEuclid": 22.536149022530964,
+      "didPass": false
+    }
+  ],
+  "dens60": {
+    "overlaps": 0,
+    "maxDepth": 0
+  },
+  "dens20": {
+    "overlaps": 42,
+    "maxDepth": 20.96250000000009
+  },
+  "densUnclamped": {
+    "overlaps": 0,
+    "maxDepth": 0
+  }
+}
