@@ -295,6 +295,68 @@ log('L5 existing Scalper past limit + despawn', {
   after: report.level5.afterDespawn
 });
 
+// Scalper caught by GBR past limit — endgate stays; spawned/served unchanged
+{
+  const { setGbrPhase, GbrPhase } = await import('../js/systems/entityFsm.js');
+  const { startArrest, updateGBR, initGbrOnSpawn } = await import('../js/systems/specialVehicles.js');
+  const { makeGBR } = await import('../js/vehicles/vehicleFactory.js');
+  FD.newGame('campaign', 5);
+  Game.money = 999999;
+  FD.actionBuildStation(Road.slots[0], 'a92');
+  Game.stats.spawned = L5.limit;
+  Game.stats.served = 200;
+  const spawnedBefore = Game.stats.spawned;
+  const servedBefore = Game.stats.served;
+  const scCaught = FD.makeScalper();
+  scCaught.scalperId = 501;
+  scCaught.wanted = true;
+  scCaught.crimeStarted = true;
+  scCaught.totalGot = 10;
+  scCaught.lane = 'outer';
+  scCaught.state = 'drive';
+  scCaught.s = 200;
+  scCaught.prevS = 200;
+  Game.scalper.unit = scCaught;
+  const gbr = makeGBR(1);
+  initGbrOnSpawn(gbr);
+  gbr.lane = 'outer';
+  gbr.state = 'drive';
+  gbr.s = scCaught.s;
+  gbr.prevS = gbr.s;
+  gbr.targetScalperId = scCaught.scalperId;
+  gbr.chaseTarget = scCaught;
+  scCaught.pursuedBy = gbr.fleetId;
+  setGbrPhase(gbr, GbrPhase.CHASE);
+  Game.vehicles = [scCaught, gbr];
+  Game.gbr.unit = gbr;
+  startArrest(gbr, scCaught);
+  const arrestPhase = gbr.gbrPhase;
+  gbr.arrestT = 0;
+  const remA = new Set();
+  updateGBR(gbr, 1 / 30, Road.length, remA);
+  if (Game.vehicles.includes(scCaught)) {
+    const remB = new Set();
+    despawnScalper(scCaught, remB);
+    Game.vehicles = Game.vehicles.filter(v => !remB.has(v));
+    Game.scalper.unit = null;
+  }
+  Game.scalperTimer = 0;
+  tickSpecialSpawns(0.01, 0);
+  report.level5.gbrCatchPastLimit = {
+    arrestPhase,
+    spawnedBefore,
+    servedBefore,
+    spawnedAfter: Game.stats.spawned,
+    servedAfter: Game.stats.served,
+    spawnedUnchanged: Game.stats.spawned === spawnedBefore,
+    servedUnchanged: Game.stats.served === servedBefore,
+    canSpawnScalper: canSpawnScalper(),
+    newScalperAfterCatch: !!Game.scalper.unit,
+    note: 'GBR catch does not bump spawned/served; endgate still blocks new Scalper'
+  };
+  log('L5 Scalper caught by GBR past limit', report.level5.gbrCatchPastLimit);
+}
+
 // Several Scalper in a row (while under limit)
 FD.newGame('campaign', 5);
 Game.money = 999999;
@@ -402,16 +464,27 @@ report.fuelCrisis.cases.push(crisisCase('fuel empty, tanker ready, can pay → N
   Game.vehicles.push(car);
 }));
 
-// Fuel empty, tanker ready, credit ok (slightly negative ok)
-report.fuelCrisis.cases.push(crisisCase('fuel empty, ready, credit OK (money=cost+floor)', () => {
+// Fuel empty, tanker ready, credit allowed (money >= 0 → can order min 20%)
+report.fuelCrisis.cases.push(crisisCase('fuel empty, ready, credit ALLOWED (money=0) → NO crisis', () => {
   FD.actionBuildStation(Road.slots[0], 'a92');
   Road.slots[0].station.res = 0;
   Game.depot.res = 0;
   Game.stats.served = 10;
   forceTankerReadyForTests();
-  const q = quoteFuelOrder(20);
-  Game.money = q.cost + creditFloor; // exactly at limit edge — canOrder uses bal-c >= floor
-  // actually canOrder: bal - c >= floor → money >= c + floor
+  Game.money = 0; // canOrderTanker: bal >= 0
+  const car = FD.makeCar(0);
+  car.served = false;
+  Game.vehicles.push(car);
+}));
+
+// Fuel empty, tanker ready, already in debt → crisis
+report.fuelCrisis.cases.push(crisisCase('fuel empty, ready, already in debt (money=-1) → crisis', () => {
+  FD.actionBuildStation(Road.slots[0], 'a92');
+  Road.slots[0].station.res = 0;
+  Game.depot.res = 0;
+  Game.stats.served = 10;
+  forceTankerReadyForTests();
+  Game.money = -1;
   const car = FD.makeCar(0);
   car.served = false;
   Game.vehicles.push(car);
@@ -425,6 +498,23 @@ report.fuelCrisis.cases.push(crisisCase('fuel empty, ready, credit EXHAUSTED →
   Game.stats.served = 10;
   forceTankerReadyForTests();
   Game.money = -80000; // below credit
+  const car = FD.makeCar(0);
+  car.served = false;
+  Game.vehicles.push(car);
+}));
+
+// Fuel empty, tanker PREPARING, but credit ALLOWED → NO crisis (can still order when ready)
+report.fuelCrisis.cases.push(crisisCase('fuel empty, tanker PREPARING, credit ALLOWED → NO crisis', () => {
+  FD.actionBuildStation(Road.slots[0], 'a92');
+  Road.slots[0].station.res = 0;
+  Game.depot.res = 0;
+  Game.stats.served = 10;
+  Game.money = 50000;
+  if (Game.logistics?.trucks?.[0]) {
+    Game.logistics.trucks[0].state = 'PREPARING';
+    Game.logistics.trucks[0].prepT = 10;
+    Game.logistics.prepSlot = 1;
+  }
   const car = FD.makeCar(0);
   car.served = false;
   Game.vehicles.push(car);
