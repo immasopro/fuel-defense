@@ -2,7 +2,9 @@ import { CONFIG } from '../config/index.js';
 import { mod } from '../core/utils.js';
 import { Road, pumpPose, apronPoseForRank, approachStopS, pocketEntryS,
   pocketPoseForRank, distAhead } from '../world/roadNetwork.js';
+import { serviceLane, exitLane, laneLat } from '../world/lanes.js';
 import { StationApi as SA } from '../systems/stationApi.js';
+import { restoreScalperToTour } from '../systems/scalperLifecycle.js';
 
 const repositionPocket = SA.repositionPocket;
 
@@ -26,6 +28,11 @@ function releasePocket(v) {
   v.targetSlot = null;
   v.stopS = null;
   v.pocketWaitT = 0;
+  v.pocketApproachT = 0;
+  // D-SPAWN-002: Scalper не остаётся в QUEUE/OWNER:STATION после срыва заезда
+  if (v.kind === 'scalper') {
+    restoreScalperToTour(v, 'release_pocket');
+  }
 }
 
 function promotePocket(st) {
@@ -66,7 +73,8 @@ function releaseReservation(v) {
 function poseForRank(v) {
   const ctx = SA.getColumnContext(v);
   const rank = ctx ? ctx.rank : 0;
-  return apronPoseForRank(v.targetSlot, v.pumpJ, rank);
+  const cars = ctx && ctx.pump ? ctx.pump.cars : null;
+  return apronPoseForRank(v.targetSlot, v.pumpJ, rank, cars);
 }
 
 function wakePumpQueue(pump) {
@@ -105,9 +113,9 @@ function beginPocketPullIn(v) {
   v.state = 'pocket';
   v.animT = 0;
   v.animDur = CONFIG.visual.pocketDur;
-  const lat = Road.laneW / 2 + (v.latOff || 0);
+  const lat = laneLat(serviceLane()) + (v.latOff || 0);
   v.animFrom = Road.posAt(v.s, lat);
-  v.animTo = pocketPoseForRank(slot, rank);
+  v.animTo = pocketPoseForRank(slot, rank, slot.station ? slot.station.pocket : null);
   v.v = 0; v.stopS = null; v.approachWait = 0;
 }
 
@@ -115,7 +123,7 @@ function beginPullIn(v) {
   v.state = 'pullIn';
   v.animT = 0;
   v.animDur = CONFIG.visual.pullInDur + v.pumpJ * 0.06;
-  const lat = Road.laneW / 2 + (v.latOff || 0);
+  const lat = laneLat(serviceLane()) + (v.latOff || 0);
   v.animFrom = Road.posAt(v.s, lat);
   v.animTo = poseForRank(v);
   v.v = 0; v.stopS = null; v.approachWait = 0;
@@ -124,7 +132,7 @@ function beginPullIn(v) {
 function beginTankerPullIn(v, slot, pumpJ) {
   v.state = 'pullIn';
   v.animT = 0; v.animDur = 0.75;
-  v.animFrom = Road.posAt(v.s, Road.laneW / 2);
+  v.animFrom = Road.posAt(v.s, laneLat(serviceLane()));
   v.animTo = pumpPose(slot, pumpJ);
   v.pumpJ = pumpJ;
   v.unloadSlot = slot;
@@ -137,7 +145,7 @@ function beginPullOut(v, mergeS) {
   v.animT = 0;
   v.animDur = CONFIG.visual.pullOutDur + v.pumpJ * 0.06;
   v.animFrom = { ...v.pose };
-  v.animTo = Road.posAt(mergeS, -Road.laneW / 2);
+  v.animTo = Road.posAt(mergeS, laneLat(exitLane()));
   v.exitS = mergeS;
 }
 
@@ -145,7 +153,7 @@ function beginLaneChange(v) {
   const exitS = mod(v.s + 14, Road.length);
   v.state = 'pullOut';
   v.animT = 0; v.animDur = CONFIG.visual.pullOutDur;
-  v.animFrom = Road.posAt(v.s, Road.laneW / 2);
+  v.animFrom = Road.posAt(v.s, laneLat(serviceLane()));
   v.animTo = Road.posAt(exitS, -Road.laneW / 2);
   v.exitS = exitS;
 }

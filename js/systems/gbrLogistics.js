@@ -1,3 +1,5 @@
+/** Логистика автопарка ГБР — v0.4.3.1: экономика базы + таблица вызовов */
+
 import { CONFIG } from '../config/index.js';
 import { Game } from '../core/gameState.js';
 import { FleetState } from './tankerLogistics.js';
@@ -8,7 +10,30 @@ function gbrFleetSize() {
   return Game.gbrBase.level;
 }
 
-function makeUnit(id) {
+function gbrPrepDuration() {
+  return CONFIG.gbrBase.prepDuration;
+}
+
+/** Базовый интервал выезда минус бонусы уровней V / VIII / X. */
+export function gbrDepartCooldownSeconds() {
+  const base = CONFIG.gbr.departCooldown ?? 5;
+  const level = Game.gbrBase?.level || 1;
+  const marks = CONFIG.gbr.departCooldownReductionLevels || [5, 8, 10];
+  let reduce = 0;
+  for (const mark of marks) {
+    if (level >= mark) reduce += 1;
+  }
+  return Math.max(0, base - reduce);
+}
+
+function gbrDepartCooldown() {
+  return gbrDepartCooldownSeconds();
+}
+
+function makeUnit(id, startPreparing) {
+  if (startPreparing) {
+    return { id, state: FleetState.PREPARING, prepT: gbrPrepDuration(), vehicle: null };
+  }
   return { id, state: FleetState.WAIT_PREPARING, prepT: 0, vehicle: null };
 }
 
@@ -21,59 +46,47 @@ export function countGbrOnMission() {
   return Game.gbrLogistics.units.filter(u => u.state === FleetState.ON_MISSION).length;
 }
 
+/**
+ * Стоимость следующего выпуска по числу ON_MISSION.
+ * RETURNING / PREPARING / READY не увеличивают цену.
+ */
 export function gbrCallCost() {
-  return CONFIG.gbrBase.baseCallCost * (countGbrOnMission() + 1);
+  const n = countGbrOnMission();
+  const table = CONFIG.gbrBase.callCostsByOnMission;
+  if (Array.isArray(table) && table.length) {
+    return table[Math.min(n, table.length - 1)];
+  }
+  return CONFIG.gbrBase.baseCallCost;
 }
 
 export function initGbrLogistics() {
   const n = gbrFleetSize();
   const units = [];
-  for (let i = 1; i <= n; i++) units.push(makeUnit(i));
-  Game.gbrLogistics = { prepSlot: null, units };
-  tryStartNextGbrPrep();
+  for (let i = 1; i <= n; i++) units.push(makeUnit(i, true));
+  Game.gbrLogistics = { units, departCd: 0 };
 }
 
 function findUnit(id) {
   return Game.gbrLogistics?.units.find(u => u.id === id) || null;
 }
 
-function unitOnPrepPost() {
-  if (!Game.gbrLogistics?.prepSlot) return null;
-  return findUnit(Game.gbrLogistics.prepSlot);
-}
-
+/** @deprecated sequential prep removed in 0.4.3 — kept as no-op for callers */
 export function tryStartNextGbrPrep() {
-  const L = Game.gbrLogistics;
-  if (!L || L.prepSlot != null) return false;
-  const next = L.units.find(u => u.state === FleetState.WAIT_PREPARING);
-  if (!next) return false;
-  next.state = FleetState.PREPARING;
-  next.prepT = CONFIG.gbrBase.prepDuration;
-  L.prepSlot = next.id;
-  return true;
+  return false;
 }
 
 export function tickGbrLogistics(dt) {
   const L = Game.gbrLogistics;
   if (!L) return;
-  sanitizeGbrPrepSlot();
-  const onPost = unitOnPrepPost();
-  if (onPost && onPost.state === FleetState.PREPARING) {
-    onPost.prepT -= dt;
-    if (onPost.prepT <= 0) {
-      onPost.prepT = 0;
-      onPost.state = FleetState.READY;
+  if (L.departCd > 0) L.departCd = Math.max(0, L.departCd - dt);
+  for (const u of L.units) {
+    if (u.state === FleetState.PREPARING) {
+      u.prepT -= dt;
+      if (u.prepT <= 0) {
+        u.prepT = 0;
+        u.state = FleetState.READY;
+      }
     }
-  }
-  if (!L.prepSlot) tryStartNextGbrPrep();
-}
-
-function sanitizeGbrPrepSlot() {
-  const L = Game.gbrLogistics;
-  if (!L?.prepSlot) return;
-  const u = findUnit(L.prepSlot);
-  if (!u || (u.state !== FleetState.PREPARING && u.state !== FleetState.READY)) {
-    L.prepSlot = null;
   }
 }
 
@@ -88,20 +101,25 @@ export function countGbrOnMap() {
   ).length;
 }
 
+export function getDepartCooldown() {
+  return Math.max(0, Game.gbrLogistics?.departCd || 0);
+}
+
 export function canDispatchGbr() {
   if (!Game.gbrLogistics) return false;
   if (!findReadyGbr()) return false;
   if (countGbrOnMap() >= gbrFleetSize()) return false;
+  if (getDepartCooldown() > 0) return false;
   return true;
 }
 
 export function attachVehicleToGbr(unit, vehicle) {
   unit.vehicle = vehicle;
   unit.state = FleetState.ON_MISSION;
-  Game.gbrLogistics.prepSlot = null;
   vehicle.fleetId = unit.id;
-  sanitizeGbrPrepSlot();
-  tryStartNextGbrPrep();
+  if (Game.gbrLogistics) {
+    Game.gbrLogistics.departCd = gbrDepartCooldown();
+  }
 }
 
 export function notifyGbrReturning(fleetId) {
@@ -115,10 +133,8 @@ export function onGbrMissionComplete(fleetId) {
   const unit = findUnit(fleetId);
   if (!unit) return;
   unit.vehicle = null;
-  unit.state = FleetState.WAIT_PREPARING;
-  unit.prepT = 0;
-  sanitizeGbrPrepSlot();
-  tryStartNextGbrPrep();
+  unit.state = FleetState.PREPARING;
+  unit.prepT = gbrPrepDuration();
 }
 
 export function onGbrBaseLevelUp() {
@@ -126,9 +142,8 @@ export function onGbrBaseLevelUp() {
   if (!L) return;
   const n = gbrFleetSize();
   while (L.units.length < n) {
-    L.units.push(makeUnit(L.units.length + 1));
+    L.units.push(makeUnit(L.units.length + 1, true));
   }
-  tryStartNextGbrPrep();
 }
 
 function gbrPanelStatusLabel(unit) {
@@ -138,7 +153,7 @@ function gbrPanelStatusLabel(unit) {
     case FleetState.ON_MISSION:
       return 'ON MISSION';
     case FleetState.RETURNING:
-      return 'ON MISSION';
+      return 'RETURNING';
     case FleetState.PREPARING:
       return 'PREPARING (' + Math.ceil(unit.prepT) + ' с)';
     default:
@@ -146,24 +161,102 @@ function gbrPanelStatusLabel(unit) {
   }
 }
 
-/** Ближайший таймер подготовки (сек), если нет READY */
+/** Ближайший таймер подготовки среди PREPARING (сек), если нет READY */
 export function nearestGbrPrepSeconds() {
   if (findReadyGbr()) return null;
-  const onPost = unitOnPrepPost();
-  if (onPost?.state === FleetState.PREPARING) return Math.max(0, onPost.prepT);
-  return null;
+  let best = null;
+  for (const u of Game.gbrLogistics?.units || []) {
+    if (u.state === FleetState.PREPARING) {
+      if (best == null || u.prepT < best) best = u.prepT;
+    }
+  }
+  return best != null ? Math.max(0, best) : null;
 }
 
-/** Компактный текст кнопки: стоимость + READY или таймер */
-export function gbrButtonSub(fmtCost) {
-  const lines = [fmtCost(gbrCallCost())];
-  if (findReadyGbr()) {
-    lines.push('READY');
-  } else {
-    const prep = nearestGbrPrepSeconds();
-    if (prep != null) lines.push('Подготовка: ' + Math.ceil(prep) + ' с');
+/**
+ * Состояние кнопки ГБР (A/B/C/D + cooldown).
+ * @returns {{
+ *   canCall: boolean,
+ *   red: boolean,
+ *   title: string,
+ *   lines: string[],
+ *   cost: number|null,
+ *   reason: 'ready'|'raid'|'prep'|'cooldown'|'blocked'
+ * }}
+ */
+export function getGbrButtonState(fmtCost) {
+  const cost = gbrCallCost();
+  const ready = !!findReadyGbr();
+  const departCd = getDepartCooldown();
+  const prep = nearestGbrPrepSeconds();
+  const onRaid = countGbrOnMap() > 0;
+  const canCall = canDispatchGbr();
+
+  // READY + cooldown закончился → красная, цена (A / D)
+  if (ready && departCd <= 0) {
+    return {
+      canCall: true,
+      red: true,
+      title: '🚨 ГБР',
+      lines: [fmtCost(cost)],
+      cost,
+      reason: 'ready'
+    };
   }
-  return lines.join('\n');
+
+  // READY, но действует 5с cooldown выезда — UI показывает причину (cooldown)
+  if (ready && departCd > 0) {
+    return {
+      canCall: false,
+      red: false,
+      title: onRaid ? '🚨 Рейд' : '🚨 ГБР',
+      lines: [Math.ceil(departCd) + ' с'],
+      cost,
+      reason: 'cooldown'
+    };
+  }
+
+  // Нет READY: идёт подготовка — UI показывает именно prep, не max(prep, cd)
+  if (prep != null) {
+    const secs = Math.max(1, Math.ceil(prep));
+    return {
+      canCall: false,
+      red: false,
+      title: onRaid ? '🚨 Рейд' : '🚨 ГБР',
+      lines: onRaid ? ['Подготовка: ' + secs + ' с'] : [secs + ' с'],
+      cost: null,
+      reason: 'prep'
+    };
+  }
+
+  // На рейде, никто не готовится и не READY (B)
+  if (onRaid) {
+    return {
+      canCall: false,
+      red: false,
+      title: '🚨 Рейд',
+      lines: [],
+      cost: null,
+      reason: 'raid'
+    };
+  }
+
+  return {
+    canCall: false,
+    red: false,
+    title: '🚨 ГБР',
+    lines: [],
+    cost: null,
+    reason: 'blocked'
+  };
+}
+
+/** Компактный текст кнопки (legacy + HUD) */
+export function gbrButtonSub(fmtCost) {
+  const st = getGbrButtonState(fmtCost);
+  if (st.reason === 'ready') return st.lines.join('\n');
+  if (st.reason === 'raid') return st.lines.length ? st.lines.join('\n') : '—';
+  return st.lines.join('\n') || '—';
 }
 
 /** Полный автопарк для панели базы ГБР */
@@ -186,16 +279,9 @@ export function forceGbrReadyForTests(unitId = 1) {
   if (!L) initGbrLogistics();
   const unit = findUnit(unitId);
   if (!unit) return;
-  if (L.prepSlot != null && L.prepSlot !== unitId) {
-    const other = findUnit(L.prepSlot);
-    if (other) {
-      other.state = FleetState.WAIT_PREPARING;
-      other.prepT = 0;
-    }
-  }
   unit.state = FleetState.READY;
   unit.prepT = 0;
-  L.prepSlot = unitId;
+  L.departCd = 0;
 }
 
 export function gbrBaseUpgradeCost() {

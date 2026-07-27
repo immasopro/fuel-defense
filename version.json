@@ -1,7 +1,11 @@
 {
-  "version": "0.4.1",
+  "version": "0.4.4",
   "notes": [
-    "Flexible tanker fuel order + bonus cashback",
-    "Start money 50000"
+    "Three full traffic lanes from level 1 (laneCount param)",
+    "Fix COLL-001 leader loss after soft-snap",
+    "Fix COLL-002 chase overtake soft-resolve until safe latOff",
+    "EXITING Scalper participates in follow; no stall teleport",
+    "GBR CHASE siren + NPC yield-right; PATROL/RETURNING normal traffic",
+    "AZS queue spacing by vehicle lengths"
   ]
 }

@@ -1,0 +1,22 @@
+{
+  "appId": "com.immasopro.fueldefense",
+  "appName": "Fuel Defense",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#10141a",
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "backgroundColor": "#10141a",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#10141a",
+      "overlaysWebView": true
+    }
+  }
+}
