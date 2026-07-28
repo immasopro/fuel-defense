@@ -1,0 +1,896 @@
+{
+  "version": "0.4.4",
+  "generatedAt": "2026-07-27T14:23:32.600Z",
+  "verdict": "FAIL",
+  "laneCount": 3,
+  "roadLength": 1754.1238596594935,
+  "findings": [
+    {
+      "id": "VER",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "GameVersion=0.4.4"
+    },
+    {
+      "id": "LANE-N",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "laneCount=3 CONFIG=3"
+    },
+    {
+      "id": "SC-NOAZS-L1",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "no AZS: scalpers=0 attempts=496 blockedNoStation=496 spawned=80",
+      "label": "L1-noStation",
+      "level": 1,
+      "buildStation": false,
+      "stations": 0,
+      "target": 100,
+      "attempts": 496,
+      "blockedNoStation": 496,
+      "blockedBudget": 0,
+      "blockedUnit": 0,
+      "spawned": 0,
+      "scalperCount": 0,
+      "lanes": [],
+      "regularSeen": 80,
+      "finalSpawned": 80,
+      "draining": false,
+      "scalperStill": false
+    },
+    {
+      "id": "SC-AZS-L1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "with AZS: scalpers=1 spawned=100/100 blockedBudget=0 blockedUnit=536 lanes=[0]",
+      "label": "L1-withStation",
+      "level": 1,
+      "buildStation": true,
+      "stations": 2,
+      "target": 100,
+      "attempts": 537,
+      "blockedNoStation": 0,
+      "blockedBudget": 0,
+      "blockedUnit": 536,
+      "spawned": 0,
+      "scalperCount": 1,
+      "lanes": [
+        0
+      ],
+      "regularSeen": 100,
+      "finalSpawned": 100,
+      "draining": true,
+      "scalperStill": true
+    },
+    {
+      "id": "SC-NOAZS-L5",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "no AZS: scalpers=0 attempts=576 blockedNoStation=576 spawned=80",
+      "label": "L5-noStation",
+      "level": 5,
+      "buildStation": false,
+      "stations": 0,
+      "target": 280,
+      "attempts": 576,
+      "blockedNoStation": 576,
+      "blockedBudget": 0,
+      "blockedUnit": 0,
+      "spawned": 0,
+      "scalperCount": 0,
+      "lanes": [],
+      "regularSeen": 80,
+      "finalSpawned": 80,
+      "draining": false,
+      "scalperStill": false
+    },
+    {
+      "id": "SC-AZS-L5",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "with AZS: scalpers=1 spawned=93/280 blockedBudget=0 blockedUnit=666 lanes=[0]",
+      "label": "L5-withStation",
+      "level": 5,
+      "buildStation": true,
+      "stations": 2,
+      "target": 280,
+      "attempts": 667,
+      "blockedNoStation": 0,
+      "blockedBudget": 0,
+      "blockedUnit": 666,
+      "spawned": 0,
+      "scalperCount": 1,
+      "lanes": [
+        0
+      ],
+      "regularSeen": 93,
+      "finalSpawned": 93,
+      "draining": false,
+      "scalperStill": true
+    },
+    {
+      "id": "SC-NOAZS-L10",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "no AZS: scalpers=0 attempts=623 blockedNoStation=623 spawned=80",
+      "label": "L10-noStation",
+      "level": 10,
+      "buildStation": false,
+      "stations": 0,
+      "target": 1000,
+      "attempts": 623,
+      "blockedNoStation": 623,
+      "blockedBudget": 0,
+      "blockedUnit": 0,
+      "spawned": 0,
+      "scalperCount": 0,
+      "lanes": [],
+      "regularSeen": 80,
+      "finalSpawned": 80,
+      "draining": false,
+      "scalperStill": false
+    },
+    {
+      "id": "SC-AZS-L10",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "with AZS: scalpers=1 spawned=94/1000 blockedBudget=0 blockedUnit=666 lanes=[0]",
+      "label": "L10-withStation",
+      "level": 10,
+      "buildStation": true,
+      "stations": 2,
+      "target": 1000,
+      "attempts": 667,
+      "blockedNoStation": 0,
+      "blockedBudget": 0,
+      "blockedUnit": 666,
+      "spawned": 0,
+      "scalperCount": 1,
+      "lanes": [
+        0
+      ],
+      "regularSeen": 94,
+      "finalSpawned": 94,
+      "draining": false,
+      "scalperStill": true
+    },
+    {
+      "id": "SC-NOAZS-L20",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "no AZS: scalpers=0 attempts=622 blockedNoStation=622 spawned=80",
+      "label": "L20-noStation",
+      "level": 20,
+      "buildStation": false,
+      "stations": 0,
+      "target": 5000,
+      "attempts": 622,
+      "blockedNoStation": 622,
+      "blockedBudget": 0,
+      "blockedUnit": 0,
+      "spawned": 0,
+      "scalperCount": 0,
+      "lanes": [],
+      "regularSeen": 80,
+      "finalSpawned": 80,
+      "draining": false,
+      "scalperStill": false
+    },
+    {
+      "id": "SC-AZS-L20",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "with AZS: scalpers=1 spawned=83/5000 blockedBudget=0 blockedUnit=666 lanes=[0]",
+      "label": "L20-withStation",
+      "level": 20,
+      "buildStation": true,
+      "stations": 2,
+      "target": 5000,
+      "attempts": 667,
+      "blockedNoStation": 0,
+      "blockedBudget": 0,
+      "blockedUnit": 666,
+      "spawned": 0,
+      "scalperCount": 1,
+      "lanes": [
+        0
+      ],
+      "regularSeen": 83,
+      "finalSpawned": 83,
+      "draining": false,
+      "scalperStill": true
+    },
+    {
+      "id": "SC-GATE-OPEN",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "open gates (AZS+budget+timer): can=true unit=true phase=driving"
+    },
+    {
+      "id": "LANE-MOT-L0",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "movedL=80.0 movedF=117.1 sawLeader=120/120 minGap=1.87 ov=0.00 ΔsL=80.0 ΔsF=117.1"
+    },
+    {
+      "id": "LANE-MOT-L1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "movedL=80.0 movedF=116.4 sawLeader=120/120 minGap=2.60 ov=0.00 ΔsL=80.0 ΔsF=116.4"
+    },
+    {
+      "id": "LANE-MOT-L2",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "movedL=80.0 movedF=116.9 sawLeader=120/120 minGap=2.11 ov=0.00 ΔsL=80.0 ΔsF=116.9"
+    },
+    {
+      "id": "LEAD-L0-sameSpeed",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "lost=false bodyTunnel=false laneChanged=false wrongGap=false minGap=37.00 worstBody=0.00"
+    },
+    {
+      "id": "LEAD-L0-fastFollower",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "lost=true bodyTunnel=false laneChanged=true wrongGap=false minGap=-20.73 worstBody=0.00"
+    },
+    {
+      "id": "LEAD-L0-stoppedLeader",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "lost=true bodyTunnel=false laneChanged=true wrongGap=false minGap=-22.88 worstBody=0.00"
+    },
+    {
+      "id": "LEAD-L0-stoppedLeaderBlocked",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "lost=false bodyTunnel=false laneChanged=false wrongGap=false minGap=7.01 worstBody=0.00"
+    },
+    {
+      "id": "LEAD-L0-bothStopped",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "lost=false bodyTunnel=false laneChanged=false wrongGap=false minGap=41.00 worstBody=0.00"
+    },
+    {
+      "id": "LEAD-L1-sameSpeed",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "lost=false bodyTunnel=false laneChanged=false wrongGap=false minGap=41.00 worstBody=0.00"
+    },
+    {
+      "id": "LEAD-L1-fastFollower",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "lost=false bodyTunnel=false laneChanged=true wrongGap=false minGap=-20.09 worstBody=0.00"
+    },
+    {
+      "id": "LEAD-L1-stoppedLeader",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "lost=true bodyTunnel=false laneChanged=true wrongGap=false minGap=-22.88 worstBody=0.00"
+    },
+    {
+      "id": "LEAD-L1-stoppedLeaderBlocked",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "lost=false bodyTunnel=false laneChanged=false wrongGap=false minGap=7.01 worstBody=0.00"
+    },
+    {
+      "id": "LEAD-L1-bothStopped",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "lost=false bodyTunnel=false laneChanged=false wrongGap=false minGap=41.00 worstBody=0.00"
+    },
+    {
+      "id": "LEAD-L2-sameSpeed",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "lost=false bodyTunnel=false laneChanged=false wrongGap=false minGap=39.00 worstBody=0.00"
+    },
+    {
+      "id": "LEAD-L2-fastFollower",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "lost=false bodyTunnel=false laneChanged=true wrongGap=false minGap=-18.19 worstBody=0.00"
+    },
+    {
+      "id": "LEAD-L2-stoppedLeader",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "lost=true bodyTunnel=false laneChanged=true wrongGap=false minGap=-22.88 worstBody=0.00"
+    },
+    {
+      "id": "LEAD-L2-stoppedLeaderBlocked",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "lost=false bodyTunnel=false laneChanged=false wrongGap=false minGap=7.00 worstBody=0.00"
+    },
+    {
+      "id": "LEAD-L2-bothStopped",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "lost=false bodyTunnel=false laneChanged=false wrongGap=false minGap=39.00 worstBody=0.00"
+    },
+    {
+      "id": "GAP-L1-REPRO",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "A(1238)→B(1345): leader=true gap=86.0 expect≈86; B→A wrap: leader=true gap=1626.1 largeWrap=true",
+      "L": 1754.1238596594935,
+      "gapA": 86,
+      "gapB": 1626.1238596594935,
+      "expectA": 86,
+      "leaderA": true,
+      "leaderB": true,
+      "wrapGapB": 1626.1238596594935
+    },
+    {
+      "id": "L1-STOPPED-PAIR",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "both maxV=0 stay put ΔsA=0.000 ΔsB=0.000 (parked, not stuck-alive)"
+    },
+    {
+      "id": "L1-FOLLOW-FREE",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "free adj: laneChanged=false bodyOv=0.00 Δs=150.4 (overtake OK if no body ov)"
+    },
+    {
+      "id": "L1-FOLLOW-STOP",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "blocked adj: stayedL1=true finalGap=7.76 v=1.3 bodyOv=0.00"
+    },
+    {
+      "id": "STUCK-60s",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "stuck-drive events (>5s no Δs): 0 byLane={\"0\":0,\"1\":0,\"2\":0} sample=[]"
+    },
+    {
+      "id": "SC-LIFE-DRIVE-L0",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "post-spawn drive: moved=320.0 state=drive phase=undefined phases=[]"
+    },
+    {
+      "id": "SC-LIFE-DRIVE-L1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "post-spawn drive: moved=320.0 state=drive phase=undefined phases=[]"
+    },
+    {
+      "id": "SC-LIFE-DRIVE-L2",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "post-spawn drive: moved=320.0 state=drive phase=undefined phases=[]"
+    },
+    {
+      "id": "SC-LANE-DIST-EMPTY",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "100 Scalper deploys on mostly-empty ring: L0=100 L1=0 L2=0 fail=0 lanesUsed=1. Prefer L0 when clear is pickSpawnLane scoring (also affects NPC)."
+    },
+    {
+      "id": "SC-BLOCK-L0",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "block L0 near spawn: scalper=true deployedLane=2"
+    },
+    {
+      "id": "SC-BLOCK-L1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "block L1 near spawn: scalper=true deployedLane=2"
+    },
+    {
+      "id": "SC-BLOCK-L2",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "block L2 near spawn: scalper=true deployedLane=1"
+    },
+    {
+      "id": "REG-L1-N100",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "spawned=100/100 lanes={\"0\":23,\"1\":12,\"2\":2} used=3"
+    },
+    {
+      "id": "REG-L5-N100",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "spawned=100/280 lanes={\"0\":19,\"1\":11,\"2\":2} used=3"
+    },
+    {
+      "id": "REG-L5-N250",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "spawned=250/280 lanes={\"0\":25,\"1\":17,\"2\":11} used=3"
+    },
+    {
+      "id": "REG-LANE-DIST-250",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "250-spawn lane use: {\"0\":25,\"1\":17,\"2\":11}"
+    },
+    {
+      "id": "PICK-EMPTY",
+      "severity": "HIGH",
+      "ok": false,
+      "detail": "pickSpawnLane empty ring ALWAYS prefers L0: {\"0\":60,\"1\":0,\"2\":0}. Under light traffic L1/L2 under-spawn until L0 congested near spawnS."
+    },
+    {
+      "id": "SHIFT-0-1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "start=true gradual=true finalLane=1 lat=0.00"
+    },
+    {
+      "id": "SHIFT-1-0",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "start=true gradual=true finalLane=0 lat=0.00"
+    },
+    {
+      "id": "SHIFT-1-2",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "start=true gradual=true finalLane=2 lat=0.00"
+    },
+    {
+      "id": "SHIFT-2-1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "start=true gradual=true finalLane=1 lat=0.00"
+    },
+    {
+      "id": "NPC-USE-L2",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "NPC reached L2=true followOnL2=60/60"
+    },
+    {
+      "id": "SIREN-P",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "PATROL siren off"
+    },
+    {
+      "id": "SIREN-R",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "RETURNING siren off"
+    },
+    {
+      "id": "SIREN-C",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "CHASE siren on"
+    },
+    {
+      "id": "YIELD-CHASE",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "CHASE yield LC=true to=1"
+    },
+    {
+      "id": "YIELD-PATROL",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "PATROL no yield"
+    },
+    {
+      "id": "YIELD-RET",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "RETURNING no yield"
+    },
+    {
+      "id": "GBR-JAM",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "CHASE jammed 3-abreast worstBodyOv=0.00"
+    },
+    {
+      "id": "GBR-SC-20",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "passThrough assigned Scalper 0/20"
+    },
+    {
+      "id": "EXIT-L0",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "inList=true bodyTunnel=false laneChanged=true maxJump=2.7 (len=23)"
+    },
+    {
+      "id": "EXIT-L1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "inList=true bodyTunnel=false laneChanged=true maxJump=2.7 (len=23)"
+    },
+    {
+      "id": "EXIT-L2",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "inList=true bodyTunnel=false laneChanged=false maxJump=2.7 (len=23)"
+    },
+    {
+      "id": "STOP-NPC-NPC-L0",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "worstBodyOv=0.00"
+    },
+    {
+      "id": "STOP-SC-NPC-L0",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "worstBodyOv=0.00"
+    },
+    {
+      "id": "STOP-GBR-NPC-L0",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "worstBodyOv=0.00"
+    },
+    {
+      "id": "STOP-NPC-GBR-L0",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "worstBodyOv=0.00"
+    },
+    {
+      "id": "STOP-SC-GBR-L0",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "worstBodyOv=0.00"
+    },
+    {
+      "id": "STOP-NPC-NPC-L1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "worstBodyOv=0.00"
+    },
+    {
+      "id": "STOP-SC-NPC-L1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "worstBodyOv=0.00"
+    },
+    {
+      "id": "STOP-GBR-NPC-L1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "worstBodyOv=0.00"
+    },
+    {
+      "id": "STOP-NPC-GBR-L1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "worstBodyOv=0.00"
+    },
+    {
+      "id": "STOP-SC-GBR-L1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "worstBodyOv=0.00"
+    },
+    {
+      "id": "STOP-NPC-NPC-L2",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "worstBodyOv=0.00"
+    },
+    {
+      "id": "STOP-SC-NPC-L2",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "worstBodyOv=0.00"
+    },
+    {
+      "id": "STOP-GBR-NPC-L2",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "worstBodyOv=0.00"
+    },
+    {
+      "id": "STOP-NPC-GBR-L2",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "worstBodyOv=0.00"
+    },
+    {
+      "id": "STOP-SC-GBR-L2",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "worstBodyOv=0.00"
+    },
+    {
+      "id": "FPS-60",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "dt=1/60 ov=0 depth=0.00"
+    },
+    {
+      "id": "FPS-33",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "dt=0.033 ov=0 depth=0.00"
+    },
+    {
+      "id": "FPS-05",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "dt=0.05 ov=0 depth=0.00"
+    },
+    {
+      "id": "QUEUE-sedan-sedan",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "sep=23.0 need≥23.0"
+    },
+    {
+      "id": "QUEUE-truck-truck",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "sep=40.0 need≥40.0"
+    },
+    {
+      "id": "QUEUE-truck-sedan",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "sep=31.5 need≥31.5"
+    },
+    {
+      "id": "QUEUE-sedan-truck",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "sep=31.5 need≥31.5"
+    },
+    {
+      "id": "ENDGATE-REMOVED",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "v0.4.3.3+: getSpecialSpawnReserve removed; canSpawnScalper===canSpawnMoreCars. At spawned=95/100 canScalper=true. QA item §24 (last-10/20) is NOT active in 0.4.4 codebase."
+    },
+    {
+      "id": "ENDGATE-BUDGET",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "at target: canScalper=false draining=true"
+    },
+    {
+      "id": "SC-APPEARS",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "special spawn when allowed: unit=true"
+    },
+    {
+      "id": "SC-DESPAWN",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "despawn clears unit=true removedFromVehicles=true"
+    },
+    {
+      "id": "SC-RESPAWN",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "next Scalper after despawn=true"
+    },
+    {
+      "id": "SANITY-L1",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "30s: spawned=7/100 scalperTicks=0 lanes=0,2,1 state=play"
+    },
+    {
+      "id": "SANITY-L5",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "30s: spawned=8/280 scalperTicks=0 lanes=0,2 state=play"
+    },
+    {
+      "id": "SANITY-L10",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "30s: spawned=6/1000 scalperTicks=0 lanes=0,2,1 state=play"
+    },
+    {
+      "id": "SANITY-L20",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "30s: spawned=7/5000 scalperTicks=0 lanes=0,2 state=play"
+    },
+    {
+      "id": "CODE-SC-AZS-GATE",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "tickSpecialSpawns requires sortedStationSlots().length before makeScalper(). newGame clears all stations. No-AZS play ⇒ Scalper never spawns (timer only resets)."
+    }
+  ],
+  "telemetry": {
+    "scalperAttempts": [
+      {
+        "label": "L1-noStation",
+        "level": 1,
+        "buildStation": false,
+        "stations": 0,
+        "target": 100,
+        "attempts": 496,
+        "blockedNoStation": 496,
+        "blockedBudget": 0,
+        "blockedUnit": 0,
+        "spawned": 0,
+        "scalperCount": 0,
+        "lanes": [],
+        "regularSeen": 80,
+        "finalSpawned": 80,
+        "draining": false,
+        "scalperStill": false
+      },
+      {
+        "label": "L1-withStation",
+        "level": 1,
+        "buildStation": true,
+        "stations": 2,
+        "target": 100,
+        "attempts": 537,
+        "blockedNoStation": 0,
+        "blockedBudget": 0,
+        "blockedUnit": 536,
+        "spawned": 0,
+        "scalperCount": 1,
+        "lanes": [
+          0
+        ],
+        "regularSeen": 100,
+        "finalSpawned": 100,
+        "draining": true,
+        "scalperStill": true
+      },
+      {
+        "label": "L5-noStation",
+        "level": 5,
+        "buildStation": false,
+        "stations": 0,
+        "target": 280,
+        "attempts": 576,
+        "blockedNoStation": 576,
+        "blockedBudget": 0,
+        "blockedUnit": 0,
+        "spawned": 0,
+        "scalperCount": 0,
+        "lanes": [],
+        "regularSeen": 80,
+        "finalSpawned": 80,
+        "draining": false,
+        "scalperStill": false
+      },
+      {
+        "label": "L5-withStation",
+        "level": 5,
+        "buildStation": true,
+        "stations": 2,
+        "target": 280,
+        "attempts": 667,
+        "blockedNoStation": 0,
+        "blockedBudget": 0,
+        "blockedUnit": 666,
+        "spawned": 0,
+        "scalperCount": 1,
+        "lanes": [
+          0
+        ],
+        "regularSeen": 93,
+        "finalSpawned": 93,
+        "draining": false,
+        "scalperStill": true
+      },
+      {
+        "label": "L10-noStation",
+        "level": 10,
+        "buildStation": false,
+        "stations": 0,
+        "target": 1000,
+        "attempts": 623,
+        "blockedNoStation": 623,
+        "blockedBudget": 0,
+        "blockedUnit": 0,
+        "spawned": 0,
+        "scalperCount": 0,
+        "lanes": [],
+        "regularSeen": 80,
+        "finalSpawned": 80,
+        "draining": false,
+        "scalperStill": false
+      },
+      {
+        "label": "L10-withStation",
+        "level": 10,
+        "buildStation": true,
+        "stations": 2,
+        "target": 1000,
+        "attempts": 667,
+        "blockedNoStation": 0,
+        "blockedBudget": 0,
+        "blockedUnit": 666,
+        "spawned": 0,
+        "scalperCount": 1,
+        "lanes": [
+          0
+        ],
+        "regularSeen": 94,
+        "finalSpawned": 94,
+        "draining": false,
+        "scalperStill": true
+      },
+      {
+        "label": "L20-noStation",
+        "level": 20,
+        "buildStation": false,
+        "stations": 0,
+        "target": 5000,
+        "attempts": 622,
+        "blockedNoStation": 622,
+        "blockedBudget": 0,
+        "blockedUnit": 0,
+        "spawned": 0,
+        "scalperCount": 0,
+        "lanes": [],
+        "regularSeen": 80,
+        "finalSpawned": 80,
+        "draining": false,
+        "scalperStill": false
+      },
+      {
+        "label": "L20-withStation",
+        "level": 20,
+        "buildStation": true,
+        "stations": 2,
+        "target": 5000,
+        "attempts": 667,
+        "blockedNoStation": 0,
+        "blockedBudget": 0,
+        "blockedUnit": 666,
+        "spawned": 0,
+        "scalperCount": 1,
+        "lanes": [
+          0
+        ],
+        "regularSeen": 83,
+        "finalSpawned": 83,
+        "draining": false,
+        "scalperStill": true
+      }
+    ],
+    "laneSpawns": {
+      "0": 100,
+      "1": 0,
+      "2": 0
+    },
+    "stuckSamples": [],
+    "gapCases": [
+      {
+        "L": 1754.1238596594935,
+        "gapA": 86,
+        "gapB": 1626.1238596594935,
+        "expectA": 86,
+        "leaderA": true,
+        "leaderB": true,
+        "wrapGapB": 1626.1238596594935
+      }
+    ]
+  },
+  "blockers": [
+    {
+      "id": "PICK-EMPTY",
+      "severity": "HIGH",
+      "detail": "pickSpawnLane empty ring ALWAYS prefers L0: {\"0\":60,\"1\":0,\"2\":0}. Under light traffic L1/L2 under-spawn until L0 congested near spawnS."
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import {
   Road, tankerTechStopS, tankerCommitS, tankerDecisionS,
   tankerTechPose, distNearStop, distAhead
 } from '../world/roadNetwork.js';
+import { serviceLane, exitLane, laneLat, isExitLane, normalizeLane } from '../world/lanes.js';
 import { Depot } from '../world/map.js';
 import { TankerPhase, setTankerPhase } from './entityFsm.js';
 import { addFloat } from './economySystem.js';
@@ -102,7 +103,7 @@ function beginTankerTechPullIn(v, slot) {
   v.state = 'pullIn';
   v.animT = 0;
   v.animDur = 0.85;
-  const lat = Road.laneW / 2 + (v.latOff || 0);
+  const lat = laneLat(serviceLane()) + (v.latOff || 0);
   v.animFrom = Road.posAt(v.s, lat);
   v.animTo = tankerTechPose(slot);
   v.v = 0;
@@ -115,7 +116,7 @@ function beginTankerTechPullOut(v, slot) {
   v.animDur = 0.7;
   v.animFrom = { ...v.pose };
   const mergeS = mod(slot.s + 20, Road.length);
-  v.animTo = Road.posAt(mergeS, Road.laneW / 2);
+  v.animTo = Road.posAt(mergeS, laneLat(serviceLane()));
   v.exitS = mergeS;
 }
 
@@ -188,7 +189,7 @@ function finishDepotReturn(v) {
   v.pose = null;
   v.s = Depot.ringJoinS;
   v.prevS = v.s;
-  v.lane = 'inner';
+  v.lane = serviceLane();
   logTankerEvent(v, '→ Exit');
   startTankerExit(v);
 }
@@ -196,7 +197,7 @@ function finishDepotReturn(v) {
 function startTankerExit(v) {
   if (v.fleetId) notifyTankerReturning(v.fleetId);
   setTankerPhase(v, TankerPhase.EXIT);
-  v.lane = 'outer';
+  v.lane = exitLane();
   v.state = 'drive';
   v.pose = null;
   v.stopS = null;
@@ -416,7 +417,7 @@ function finishTankerPullOut(v, L, removeSet) {
     return;
   }
 
-  v.lane = 'inner';
+  v.lane = serviceLane();
   v.state = 'drive';
   v.s = v.exitS;
   v.prevS = v.s;
@@ -436,7 +437,7 @@ function finishTankerPullOut(v, L, removeSet) {
 
 function tryRemoveExitingTanker(v, removeSet) {
   if (v.kind !== 'tanker' || v.tankerPhase !== TankerPhase.EXIT) return;
-  if (v.lane === 'outer' && v.trip > 20 && crossed(v, Road.spawnS)) {
+  if (isExitLane(normalizeLane(v.lane)) && v.trip > 20 && crossed(v, Road.spawnS)) {
     removeSet.add(v);
     if (v.fleetId) onTankerMissionComplete(v.fleetId);
     if (Game.tanker.unit === v) Game.tanker.unit = null;
