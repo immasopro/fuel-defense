@@ -1,10 +1,8 @@
 {
-  "version": "0.4.4.1",
+  "version": "0.4.4.2",
   "notes": [
-    "Entry on L2 with merge-in to L1/L0",
-    "Multi-Scalper by budget; undercover without AZS",
-    "Undercover countsForDefeat; no undercover despawn",
-    "Endgate last-10/20 officially abandoned",
-    "Extended end-level statistics button"
+    "CHASE GBR: weaker bumper-cap, aggressive overtake",
+    "GBR free-lane pursuit (not locked to target lane)",
+    "Road arrest via cut-off block then ARRESTING"
   ]
 }

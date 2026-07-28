@@ -14,7 +14,7 @@ import { onGbrMissionComplete, notifyGbrReturning, gbrPatrolSpeed } from './gbrL
 import { currentScalperMaxLiters } from './scalperEvolution.js';
 import { ScalperPhase, GbrPhase, setScalperPhase, setGbrPhase } from './entityFsm.js';
 import { beginPullIn } from '../stations/stationQueue.js';
-import { crossed } from '../vehicles/vehicle.js';
+import { crossed, beginLaneShift, laterallyConflicts, ensureNumericLane } from '../vehicles/vehicle.js';
 import {
   onScalperTheftDetected, getGbrTarget, releaseGbrTarget,
   gbrPursuitTarget, isGbrAssignedTarget, isAssignedScalperOnMap,
@@ -267,14 +267,176 @@ function scalperOnColumn(sc) {
 
 }
 
-/** Дорожное преследование: та же полоса, сближение до дистанции ареста. */
+/** Дорожное преследование: свободная полоса + подрезание (v0.4.4.2). */
 function applyRoadChasePursuit(g, target, L) {
-  g.lane = normalizeLane(target.lane ?? g.lane ?? serviceLane());
+  ensureNumericLane(g);
+  ensureNumericLane(target);
   g.maxV = Math.max(gbrPatrolSpeed(), CONFIG.scalper.exitSpeed + 10);
-  g.stopS = mod(target.s, L);
+  // Не лочим lane = target.lane — манёвр сам выбирает свободную / полосу для cut-off
+  updateChaseCutOff(g, target, L);
 }
 
+function cutOffCfg() {
+  return CONFIG.gbr.chaseDrive?.cutOff || {};
+}
 
+/** ГБР перекрывает путь перекупу (впереди + lat конфликт / та же полоса). */
+function gbrIsCuttingOff(g, sc, L) {
+  if (!g || !sc) return false;
+  ensureNumericLane(g);
+  ensureNumericLane(sc);
+  const CO = cutOffCfg();
+  const ahead = mod(g.s - sc.s, L); // 0 = совпали; малое = ГБР чуть впереди
+  const maxAhead = CO.blockAheadMax ?? 26;
+  const slop = CO.blockBehindSlop ?? 5;
+  // ahead близко к L значит ГБР чуть сзади
+  const justBehind = ahead > L - slop;
+  const justAhead = ahead >= 0 && ahead <= maxAhead;
+  if (!justAhead && !justBehind) return false;
+  const sameLane = normalizeLane(g.lane) === normalizeLane(sc.lane);
+  if (sameLane || laterallyConflicts(g, sc)) return true;
+  return false;
+}
+
+function laneClearScore(lane, s, len, L, ignoreA, ignoreB) {
+  // Простая оценка «свободно впереди»
+  let best = 1e9;
+  for (const o of Game.vehicles) {
+    if (!o || o === ignoreA || o === ignoreB) continue;
+    if (normalizeLane(o.lane) !== lane) continue;
+    if (o.state !== 'drive' && !(o.kind === 'scalper' && o.scalperPhase === ScalperPhase.EXITING)) continue;
+    const gap = mod(o.s - s, L) - (o.len + len) / 2;
+    if (gap >= -0.05 && gap < best) best = gap;
+  }
+  return best;
+}
+
+/**
+ * Выбор полосы в погоне: к цели / свободнее / для обгона сбоку.
+ * Не телепортирует — только beginLaneShift.
+ */
+function tryChaseLanePick(g, target, L) {
+  if (g.overtake || g.laneChange) return;
+  const CO = cutOffCfg();
+  g.chaseLanePickT = (g.chaseLanePickT || 0);
+  if (g.chaseLanePickT > 0) return;
+  ensureNumericLane(g);
+  ensureNumericLane(target);
+  const tLane = normalizeLane(target.lane);
+  const behind = mod(target.s - g.s, L);
+  const ahead = mod(g.s - target.s, L);
+  const passBehind = CO.passBehind ?? 70;
+  const passAhead = CO.passAhead ?? 16;
+
+  let want = g.lane;
+  // Уже впереди цели — врезаемся в её полосу (подрезание)
+  if (ahead > 0 && ahead < (CO.blockAheadMax ?? 26) + passAhead) {
+    want = tLane;
+  } else if (behind < passBehind) {
+    // Близко сзади: если на той же полосе — уйти в соседнюю для обгона;
+    // если на соседней и почти догнали — готовить cut-in после обгона
+    if (g.lane === tLane) {
+      const n = CONFIG.road?.laneCount ?? 3;
+      const opts = [];
+      const right = tLane + 1;
+      const left = tLane - 1;
+      if (right < n) opts.push(right);
+      if (left >= 0) opts.push(left);
+      let best = null, bestScore = -1;
+      for (const lane of opts) {
+        const sc = laneClearScore(lane, g.s, g.len, L, g, target);
+        if (sc > bestScore) { bestScore = sc; best = lane; }
+      }
+      if (best != null) want = best;
+    } else if (Math.abs(g.lane - tLane) === 1) {
+      // На соседней — остаёмся, пока не выедем вперёд, потом cut-in
+      if (ahead > 0 && ahead < passAhead + 8) want = tLane;
+      else want = g.lane;
+    } else {
+      // Далеко по полосам — шаг к цели
+      want = g.lane + Math.sign(tLane - g.lane);
+    }
+  } else {
+    // Далеко: свободная полоса с уклоном к цели
+    const n = CONFIG.road?.laneCount ?? 3;
+    let best = g.lane, bestScore = laneClearScore(g.lane, g.s, g.len, L, g, target);
+    for (let lane = 0; lane < n; lane++) {
+      if (Math.abs(lane - g.lane) !== 1) continue;
+      let score = laneClearScore(lane, g.s, g.len, L, g, target);
+      if (lane === tLane) score += 30;
+      else if (Math.abs(lane - tLane) < Math.abs(g.lane - tLane)) score += 12;
+      if (score > bestScore) { bestScore = score; best = lane; }
+    }
+    want = best;
+  }
+
+  want = normalizeLane(want);
+  if (want === g.lane) return;
+  if (beginLaneShift(g, want, { dur: (CONFIG.gbr.chaseDrive?.overtakeDur ?? 1.15) * 0.85 })) {
+    g.chaseLanePickT = CO.lanePickRetry ?? 0.35;
+  } else {
+    g.chaseLanePickT = (CO.lanePickRetry ?? 0.35) * 0.5;
+  }
+}
+
+function updateChaseCutOff(g, target, L) {
+  const CO = cutOffCfg();
+  const dt = g._chaseDt || 1 / 30;
+  g.chaseLanePickT = Math.max(0, (g.chaseLanePickT || 0) - dt);
+
+  const behind = mod(target.s - g.s, L);
+  const ahead = mod(g.s - target.s, L);
+  const passAhead = CO.passAhead ?? 16;
+
+  tryChaseLanePick(g, target, L);
+
+  // Цель сзади нас (мы выехали вперёд) — тормозим чуть впереди, перекрывая
+  if (ahead > 0 && ahead < (CO.blockAheadMax ?? 26) + passAhead) {
+    g.stopS = mod(target.s + Math.min(passAhead, Math.max(6, ahead)), L);
+    if (normalizeLane(g.lane) !== normalizeLane(target.lane) && !g.laneChange && !g.overtake) {
+      beginLaneShift(g, normalizeLane(target.lane), {
+        dur: (CONFIG.gbr.chaseDrive?.overtakeDur ?? 1.15) * 0.7,
+        force: true
+      });
+    }
+    if (gbrIsCuttingOff(g, target, L)) {
+      g.cutOffHoldT = (g.cutOffHoldT || 0) + dt;
+      g.v = Math.min(g.v, Math.max(target.v * 0.85, 12));
+    } else {
+      g.cutOffHoldT = Math.max(0, (g.cutOffHoldT || 0) - dt * 0.5);
+    }
+  } else if (behind < (CO.passBehind ?? 70)) {
+    // Догоняем / обходим сбоку — полный газ, без stopS на бампере цели
+    g.stopS = null;
+    g.cutOffHoldT = 0;
+    g.v = Math.max(g.v, g.maxV * 0.55);
+  } else {
+    g.stopS = null;
+    g.cutOffHoldT = 0;
+  }
+}
+
+function gbrCanArrestNow(g, sc) {
+  if (!isGbrAssignedTarget(g, sc) || !isAssignedScalperOnMap(sc)) return false;
+  if (sc.scalperPhase === ScalperPhase.ARRESTING) return false;
+
+  // На колонке — по-прежнему дистанция / подход
+  if (scalperOnColumn(sc)) {
+    return gbrCatchDistance(g, sc) <= CONFIG.gbr.arrestDist;
+  }
+
+  const L = Road.length;
+  const CO = cutOffCfg();
+  const holdNeed = CO.holdSec ?? 0.25;
+  const blocking = gbrIsCuttingOff(g, sc, L);
+  const close = gbrCatchDistance(g, sc) <= CONFIG.gbr.arrestDist;
+
+  // Уже в блоке пути: hold или очень близко (overlap / test fixtures)
+  if (blocking && ((g.cutOffHoldT || 0) >= holdNeed || close)) return true;
+  // Fallback: почти полное перекрытие позиций (регресс / мгновенный catch)
+  if (close && blocking) return true;
+  return false;
+}
 
 function vehicleWorldPos(v) {
   if (v.pose) return { x: v.pose.x, y: v.pose.y };
@@ -282,8 +444,6 @@ function vehicleWorldPos(v) {
   const p = Road.posAt(v.s, lat);
   return { x: p.x, y: p.y };
 }
-
-
 
 function scalperOnMap(sc) {
   return sc && Game.vehicles.includes(sc) &&
@@ -297,8 +457,6 @@ function scalperIsGbrTarget(sc) {
     sc.scalperPhase !== ScalperPhase.EXITING &&
     !!sc.wanted;
 }
-
-
 
 function gbrSeesScalper(g, sc) {
   if (!scalperIsGbrTarget(sc)) return false;
@@ -321,33 +479,16 @@ function gbrTargetsInRange(g) {
   return hits.map(h => h.v);
 }
 
-
-
 function gbrArrestPose(sc) {
-
   const rank = SA.pumpRank(sc.pump, sc);
-
   return apronPoseForRank(sc.targetSlot, sc.pumpJ, rank + 1);
-
 }
-
-
 
 function gbrCatchDistance(g, sc) {
   const pg = vehicleWorldPos(g);
   const ps = vehicleWorldPos(sc);
   return Math.hypot(ps.x - pg.x, ps.y - pg.y);
 }
-
-
-
-function gbrCanArrestNow(g, sc) {
-  if (!isGbrAssignedTarget(g, sc) || !isAssignedScalperOnMap(sc)) return false;
-  if (sc.scalperPhase === ScalperPhase.ARRESTING) return false;
-  return gbrCatchDistance(g, sc) <= CONFIG.gbr.arrestDist;
-}
-
-
 
 function resumeGbrChase(g, L, reason) {
   SA.releaseColumn(g);
@@ -496,11 +637,20 @@ function startArrest(g, sc) {
   if (g.state === 'drive') g.stopS = g.s;
   g.arrestT = CONFIG.gbr.towTime;
   g.chaseResumeS = null;
+  g.cutOffHoldT = 0;
+  g.overtake = null;
+  g.laneChange = null;
+  g.latOff = 0;
   onGbrArrestStarted(g, sc);
   const onRoad = !sc.pose;
-  if (onRoad) logPursuitEvent('[GBR #' + g.fleetId + '] Road arrest');
-  addFloat(g.pose?.x ?? vehicleWorldPos(g).x, (g.pose?.y ?? vehicleWorldPos(g).y) - 24,
-    'Задержание…', '#42a5f5');
+  if (onRoad) {
+    logPursuitEvent('[GBR #' + g.fleetId + '] Road cut-off arrest');
+    addFloat(g.pose?.x ?? vehicleWorldPos(g).x, (g.pose?.y ?? vehicleWorldPos(g).y) - 24,
+      'Подрезание!', '#42a5f5');
+  } else {
+    addFloat(g.pose?.x ?? vehicleWorldPos(g).x, (g.pose?.y ?? vehicleWorldPos(g).y) - 24,
+      'Задержание…', '#42a5f5');
+  }
 }
 
 
@@ -655,10 +805,12 @@ function updateGbrChase(g, sc, dt, L) {
     if (g.targetScalperId != null) releaseGbrTarget(g, { reason: 'despawn' });
     setGbrPhase(g, GbrPhase.PATROL);
     g.stopS = null;
+    g.cutOffHoldT = 0;
     return;
   }
 
   g.chaseTarget = target;
+  g._chaseDt = dt;
 
   if (gbrCanArrestNow(g, target)) {
     startArrest(g, target);
@@ -824,7 +976,7 @@ export {
   decideAfterArrestExit, onGbrReturnPullOutComplete,
   beginGbrPullIn, tryGbrApproach, scalperIsGbrTarget, scalperOnMap,
   gbrSeesScalper, gbrTargetsInRange, startArrest, tryAttachScalperToStation,
-  gbrCanArrestNow, resumeGbrChase
+  gbrCanArrestNow, resumeGbrChase, gbrIsCuttingOff
 };
 
 

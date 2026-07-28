@@ -173,6 +173,7 @@ export const balance = {
     visionRadius: 500,
     patrolMaxLaps: 5,
     chaseFollowDist: 14,
+    /** Euclidean fallback / station catch; road arrest prefers cut-off block */
     arrestDist: 22,
     /** Глобальный cooldown между фактическими выездами экипажей (v0.4.3) */
     departCooldown: 5,
@@ -181,19 +182,41 @@ export const balance = {
      * V → 4с, VIII → 3с, X → 2с. Не влияет на prepDuration.
      */
     departCooldownReductionLevels: [5, 8, 10],
-    /** Приоритетное движение только в CHASE (мигалка вкл.) */
+    /** Приоритетное движение только в CHASE (мигалка вкл.) — v0.4.4.2 */
     chaseDrive: {
       gapMin: 1.5,
       overtakeTrigger: 90,
-      overtakeDur: 1.35,
-      /** Clearance на целевой полосе перед стартом обгона (не баланс скорости) */
-      outerAheadPad: 28,
-      outerBehindPad: 24,
+      overtakeDur: 1.15,
+      /** Обычный clearance на целевой полосе (ослаблен vs 0.4.4) */
+      outerAheadPad: 14,
+      outerBehindPad: 12,
+      /** Force-обгон в плотном потоке — ещё короче */
+      forceAheadPad: 8,
+      forceBehindPad: 6,
+      forceOvertakeGap: 55,
+      /** Bumper-cap при упёртости в не-цель (было жёстко 0.35) */
+      bumperCapFrac: 0.88,
+      bumperLeadSlack: 14,
       /** Доля ширины полосы: ниже — ещё конфликтуем по lat с исходным лидером (COLL-002) */
       safeLatFrac: 0.55,
       /** NPC уступает CHASE GBR вправо, если свободно */
       yieldLookBack: 70,
-      yieldLookAhead: 40
+      yieldLookAhead: 40,
+      /** Подрезание цели → ARREST (дорога) */
+      cutOff: {
+        /** Начать манёвр обгона/подрезания, когда цель впереди ближе этого */
+        passBehind: 70,
+        /** Насколько выехать вперёд цели перед врезанием в её полосу */
+        passAhead: 16,
+        /** Макс. кольцевой выигрыш «ГБР впереди», чтобы считать блок */
+        blockAheadMax: 26,
+        /** Допуск, если чуть сзади / overlap */
+        blockBehindSlop: 5,
+        /** Сек. удержания блока до старта ARREST (0 = сразу при блоке+близости) */
+        holdSec: 0.25,
+        /** Свободная полоса: период между попытками lane shift */
+        lanePickRetry: 0.35
+      }
     }
   },
 

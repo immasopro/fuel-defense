@@ -296,3 +296,22 @@ Overlay shows lane, latOff, overtake, bumper, gap, siren, chase phase/target, Sc
 - `scripts/qa-audit-0441-entry-scalper.mjs` → `docs/QA_0441_ENTRY_SCALPER_AUDIT.md`
 - Headless regression block in `test_headless.js` (version + entry/multi/stats).
 
+---
+
+## 0.4.4.2 — CHASE GBR free-lane + cut-off arrest (2026-07-28)
+
+### Goals
+1. CHASE GBR no longer crawls on L0/L1 while flying on L2.
+2. Road arrest reads as a **cut-off** (block the scalper’s path), then ARRESTING.
+
+### Chase driving
+- **Bumper-cap** — `chaseDrive.bumperCapFrac` / `bumperLeadSlack` (was hard `0.35*maxV`).
+- **Overtake pads** — `outerAheadPad/Behind` reduced; real **force** path uses `forceAheadPad/Behind`.
+- **Pass target** — CHASE may overtake the assigned scalper via adjacent lane (was forbidden).
+- **Lane pick** — `applyRoadChasePursuit` no longer sets `lane = target.lane`; `tryChaseLanePick` chooses freer / cut-off lane via `beginLaneShift`.
+
+### Cut-off arrest
+- Road: GBR gets ahead (or overlaps), same lane or lateral conflict → `cutOffHoldT` → `startArrest`.
+- Float «Подрезание!» on road; station path unchanged (distance / column).
+- Euclidean `arrestDist` remains fallback when already blocking + close (tests / overlap).
+

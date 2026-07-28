@@ -163,16 +163,52 @@ function canCommitOvertakeLane(v, toLane, L) {
   return true;
 }
 
+function getAssignedChaseTarget(gbr) {
+  if (!gbr || gbr.targetScalperId == null) return null;
+  const vehicles = Game.vehicles || [];
+  return vehicles.find(v => v.kind === 'scalper' && v.scalperId === gbr.targetScalperId) || null;
+}
+
+function laneForwardClearance(lane, s, len, L, ignore) {
+  const list = laneList(lane);
+  let best = 1e9;
+  for (const o of list) {
+    if (o === ignore) continue;
+    const g = mod(o.s - s, L) - (o.len + len) / 2;
+    if (g >= -0.05 && g < best) best = g;
+  }
+  return best;
+}
+
 function overtakeTargetLane(v) {
   if (v.overtakeToLane != null) return clampLane(v.overtakeToLane);
   ensureNumericLane(v);
-  // CHASE GBR: предпочитаем наружу (больше индекс), иначе внутрь
+  // CHASE GBR: к цели / в более свободную соседнюю — не всегда «только наружу»
   if (isChasePriorityGbr(v)) {
-    const right = v.lane + 1;
-    if (right < laneCount()) return right;
-    const left = v.lane - 1;
-    if (left >= 0) return left;
-    return v.lane;
+    const L = Road.length;
+    const target = getAssignedChaseTarget(v);
+    const cand = [];
+    if (v.lane + 1 < laneCount()) cand.push(v.lane + 1);
+    if (v.lane - 1 >= 0) cand.push(v.lane - 1);
+    if (!cand.length) return v.lane;
+    let best = cand[0];
+    let bestScore = -1e18;
+    for (const lane of cand) {
+      let score = laneForwardClearance(lane, v.s, v.len, L, v);
+      if (target) {
+        const tLane = normalizeLane(target.lane);
+        // Близко к цели — предпочитаем полосу цели или соседнюю для обгона
+        const behind = mod(target.s - v.s, L);
+        if (behind < (chaseDriveCfg().cutOff?.passBehind ?? 70)) {
+          if (lane === tLane) score += 40;
+          else if (Math.abs(lane - tLane) === 1) score += 25;
+        } else if (lane === tLane) {
+          score += 10;
+        }
+      }
+      if (score > bestScore) { bestScore = score; best = lane; }
+    }
+    return best;
   }
   // Гражданские: обгон «влево» = наружу (L+1), как левая полоса ПДД РФ
   const outer = v.lane + 1;
@@ -182,11 +218,11 @@ function overtakeTargetLane(v) {
   return v.lane;
 }
 
-function adjacentClearForOvertake(v, toLane, L) {
+function adjacentClearForOvertake(v, toLane, L, padOverride) {
   const list = laneList(toLane);
   const CD = isChasePriorityGbr(v) ? chaseDriveCfg() : null;
-  const aheadPad = CD ? CD.outerAheadPad : 22;
-  const behindPad = CD ? CD.outerBehindPad : 26;
+  const aheadPad = padOverride?.ahead ?? (CD ? CD.outerAheadPad : 22);
+  const behindPad = padOverride?.behind ?? (CD ? CD.outerBehindPad : 26);
   const testS = mod(v.s + v.len * 0.6, L);
   for (const o of list) {
     if (o === v) continue;
@@ -229,8 +265,20 @@ function canStartOvertake(v, leader, gapNow, F) {
   if (toLane === v.lane) return false;
 
   if (isChasePriorityGbr(v)) {
-    if (isAssignedChaseTarget(v, leader)) return false;
     const CD = chaseDriveCfg();
+    // Цель впереди на той же полосе — уходим в соседнюю, чтобы обогнать и подрезать
+    if (isAssignedChaseTarget(v, leader)) {
+      const toLane = overtakeTargetLane(v);
+      if (toLane === v.lane) return false;
+      const pads = { ahead: CD.forceAheadPad ?? 8, behind: CD.forceBehindPad ?? 6 };
+      if (adjacentClearForOvertake(v, toLane, Road.length, pads) ||
+          adjacentClearForOvertake(v, toLane, Road.length)) {
+        v.overtakeToLane = toLane;
+        v.overtakeFromLane = v.lane;
+        return true;
+      }
+      return false;
+    }
     if (gapNow <= CD.gapMin) return false;
     if (gapNow >= CD.overtakeTrigger) return false;
     if (leader.v >= v.maxV * 0.95 && leader.maxV >= v.maxV - 2) return false;
@@ -239,11 +287,15 @@ function canStartOvertake(v, leader, gapNow, F) {
       v.overtakeFromLane = v.lane;
       return true;
     }
-    // Плотный поток: форсировать только если соседняя полоса хоть чуть свободна сзади/впереди
-    if (gapNow < 40 && leader.v < v.maxV * 0.9 && adjacentClearForOvertake(v, toLane, Road.length)) {
-      v.overtakeToLane = toLane;
-      v.overtakeFromLane = v.lane;
-      return true;
+    // Force: плотный поток — короче pads
+    const forceGap = CD.forceOvertakeGap ?? 55;
+    if (gapNow < forceGap && leader.v < v.maxV * 0.95) {
+      const pads = { ahead: CD.forceAheadPad ?? 8, behind: CD.forceBehindPad ?? 6 };
+      if (adjacentClearForOvertake(v, toLane, Road.length, pads)) {
+        v.overtakeToLane = toLane;
+        v.overtakeFromLane = v.lane;
+        return true;
+      }
     }
     return false;
   }
@@ -433,7 +485,16 @@ function updateLane(list, dt) {
 
     let vt;
     if (followGap <= gapMin && (softResolveActive(v) || latLead.leader)) {
-      vt = isChasePriorityGbr(v) ? Math.min(v.maxV * 0.35, Math.max(8, followLV + 4)) : 0;
+      if (isChasePriorityGbr(v)) {
+        const CD = chaseDriveCfg();
+        const frac = CD.bumperCapFrac ?? 0.88;
+        const slack = CD.bumperLeadSlack ?? 14;
+        // Не встаём в «пробку на 35%» — держим темп ближе к maxV / лидер+slack
+        vt = Math.min(v.maxV, Math.max(v.maxV * frac * 0.75, followLV + slack, 24));
+        vt = Math.min(vt, v.maxV * frac);
+      } else {
+        vt = 0;
+      }
     } else if (v.overtake && Math.abs(v.latOff || 0) >= safeLatOffset(v) && !latLead.leader) {
       vt = v.maxV;
     } else if (v.overtake) {

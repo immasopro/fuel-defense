@@ -563,7 +563,14 @@ assert(gbrChase.gbrPhase === GbrPhase.CHASE, 'CHASE after assign');
 assert(isChasePriorityGbr(gbrChase), 'CHASE has priority driving');
 assert(canStartOvertake(gbrChase, slowCar, 50, CONFIG.follow), 'CHASE overtakes from far gap');
 assert(canStartOvertake(gbrChase, slowCar, 12, CONFIG.follow), 'CHASE overtakes slow civilian');
-assert(!canStartOvertake(gbrChase, scChase, 12, CONFIG.follow), 'CHASE does not overtake own target');
+// v0.4.4.2: CHASE may pass own target on adjacent lane to cut off
+gbrChase.overtake = null;
+gbrChase.overtakeToLane = null;
+gbrChase.overtakeFromLane = null;
+assert(canStartOvertake(gbrChase, scChase, 12, CONFIG.follow), '0442 CHASE may overtake own target to cut off');
+gbrChase.overtake = null;
+gbrChase.overtakeToLane = null;
+gbrChase.overtakeFromLane = null;
 let startedOvertake = false;
 let returnedToLane = false;
 let passedSlow = false;
@@ -824,9 +831,9 @@ assert(despawnLog, 'Despawn complete logged');
 // version check
 const { compareVersions, isNewerVersion, GAME_VERSION, hasPendingUpdate, _setRemoteVersionForTest } =
   await import('./js/systems/versionCheck.js');
-assert(GAME_VERSION === '0.4.4.1', 'GAME_VERSION 0.4.4.1');
-assert(compareVersions('0.4.4.1', '0.4.4') > 0, 'semver newer than 0.4.4');
-assert(!isNewerVersion('0.4.4.1'), 'same version not newer');
+assert(GAME_VERSION === '0.4.4.2', 'GAME_VERSION 0.4.4.2');
+assert(compareVersions('0.4.4.2', '0.4.4.1') > 0, 'semver newer than 0.4.4.1');
+assert(!isNewerVersion('0.4.4.2'), 'same version not newer');
 assert(isNewerVersion('0.4.5'), '0.4.5 is newer');
 _setRemoteVersionForTest({ version: '0.4.5', notes: ['Тест'] });
 assert(hasPendingUpdate(), 'pending update detected');
@@ -900,7 +907,7 @@ assert(Game.time > 0, 'game advances after rAF frames');
 globalThis.window.requestAnimationFrame = prevRaf;
 
 const { GameVersion } = await import('./js/config/gameVersion.js');
-assert(GameVersion.version === '0.4.4.1', 'GameVersion is 0.4.4.1');
+assert(GameVersion.version === '0.4.4.2', 'GameVersion is 0.4.4.2');
 assert(GameVersion.changes.length <= 8, 'patch notes capped at 8 items');
 
 const { StationApi } = await import('./js/systems/stationApi.js');
@@ -1352,9 +1359,9 @@ assert(migrated.tankerTruck.level === 1, 'migration tanker level I');
 assert(migrated.fleet.level === 1, 'migration fleet level I');
 assert(migrated.depot.res <= migrated.depot.cap, 'migration clamps fuel');
 assert(isNewerVersion('0.4.5'), 'semver newer');
-assert(!isNewerVersion('0.4.4.1'), 'same version not newer');
+assert(!isNewerVersion('0.4.4.2'), 'same version not newer');
 _resetVersionNotificationForTest();
-showVersionNotification('0.4.4.1');
+showVersionNotification('0.4.4.2');
 assert(true, 'version notification once per session');
 
 // v0.4.2.1 — аварийный обмен бонусов
@@ -2284,6 +2291,56 @@ for (let i = 0; i < 20; i++) {
   assert(html.includes('Перекупы') && html.includes('ГБР'), '0441 extended stats html');
   assert(document.getElementById('btn-end-stats'), '0441 end stats button exists');
   assert(document.getElementById('end-stats-ext'), '0441 end stats panel exists');
+}
+
+// ─── v0.4.4.2 — CHASE bumper/force + cut-off arrest ───
+{
+  const { gbrIsCuttingOff, gbrCanArrestNow: canArrest } =
+    await import('./js/systems/specialVehicles.js');
+  const CD = CONFIG.gbr.chaseDrive;
+  assert(CD.bumperCapFrac >= 0.7, '0442 bumperCapFrac relaxed');
+  assert(CD.outerAheadPad <= 16, '0442 overtake pads tightened');
+  assert(CD.forceAheadPad < CD.outerAheadPad, '0442 force pads stricter than normal');
+  assert(CD.cutOff && CD.cutOff.passBehind > 0, '0442 cutOff config present');
+
+  FD.newGame('campaign', 1);
+  const scCut = FD.makeScalper();
+  scCut.scalperId = 902;
+  scCut.wanted = true;
+  scCut.crimeStarted = true;
+  scCut.lane = 1;
+  scCut.state = 'drive';
+  scCut.s = 400;
+  scCut.prevS = 400;
+  scCut.v = 40;
+  setScalperPhase(scCut, ScalperPhase.DRIVING);
+  const gCut = makeGBR(9);
+  initGbrOnSpawn(gCut);
+  gCut.lane = 1;
+  gCut.state = 'drive';
+  gCut.s = 412; // ahead of scalper
+  gCut.prevS = 412;
+  gCut.v = 50;
+  gCut.maxV = 100;
+  gCut.cutOffHoldT = 0.3;
+  Game.vehicles = [scCut, gCut];
+  assignGbrTarget(gCut, scCut);
+  assert(gbrIsCuttingOff(gCut, scCut, Road.length), '0442 GBR ahead same lane is cut-off');
+  assert(canArrest(gCut, scCut), '0442 cut-off + hold → can arrest');
+
+  // Not locked to target lane after chase tick
+  gCut.lane = 0;
+  gCut.s = modS(scCut.s - 80, Road.length);
+  gCut.prevS = gCut.s;
+  gCut.cutOffHoldT = 0;
+  gCut._chaseDt = 1 / 30;
+  const remSet = new Set();
+  const { updateGBR } = await import('./js/systems/specialVehicles.js');
+  updateGBR(gCut, 1 / 30, Road.length, remSet);
+  assert(gCut.gbrPhase === GbrPhase.CHASE, '0442 stays CHASE while closing');
+  // May lane-change or stay — must NOT teleport to target.lane every frame without anim
+  assert(gCut.lane === 0 || gCut.laneChange || gCut.lane === scCut.lane,
+    '0442 free-lane pursuit (lane=' + gCut.lane + ')');
 }
 
 console.log('\nALL CRITICAL REGRESSION TESTS PASSED');

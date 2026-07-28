@@ -1,0 +1,78 @@
+{
+  "version": "0.4.4.2",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "id": "VER",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "GameVersion=0.4.4.2"
+    },
+    {
+      "id": "CFG-CAP",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "bumperCapFrac=0.88 outerAheadPad=14"
+    },
+    {
+      "id": "CFG-FORCE",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "forceAhead=8 forceBehind=6"
+    },
+    {
+      "id": "CFG-CUT",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "cutOff.passBehind=70"
+    },
+    {
+      "id": "CHASE-PRIO",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "phase=chase"
+    },
+    {
+      "id": "OVT-CIV",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "can overtake civilian"
+    },
+    {
+      "id": "OVT-TGT",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "can overtake own target for cut-off"
+    },
+    {
+      "id": "SPEED-L0",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "after jam ticks v=100.0 (want >40% maxV)"
+    },
+    {
+      "id": "FREE-LANE",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "lane=2 laneChange=true (not teleported to 0)"
+    },
+    {
+      "id": "CUT-GEOM",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "GBR ahead same lane blocks"
+    },
+    {
+      "id": "CUT-ARREST",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "cut-off allows arrest"
+    },
+    {
+      "id": "CUT-PHASE",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "gbr=arrest sc=arresting"
+    }
+  ]
+}
