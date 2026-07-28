@@ -1,4 +1,5 @@
 import { CONFIG } from '../config/index.js';
+import { CANVAS } from '../config/constants.js';
 import { Game } from '../core/gameState.js';
 import { fmtTime, clamp } from '../core/utils.js';
 import { fmtRub } from '../core/currency.js';
@@ -6,11 +7,16 @@ import { GameVersion } from '../config/gameVersion.js';
 import { innerLaneList, isLightGreen } from '../systems/trafficSystem.js';
 import { getServedHudText } from '../systems/spawnSystem.js';
 import { canDispatchTanker, tankerButtonSub } from '../systems/tankerLogistics.js';
-import { gbrButtonSub, gbrCallCost, canDispatchGbr } from '../systems/gbrLogistics.js';
+import { getGbrButtonState } from '../systems/gbrLogistics.js';
+import {
+  speedBoostLabel, canEnableSpeedBoost, isSpeedBoostActive
+} from '../systems/speedBoost.js';
 import { refreshTankerOrderQuote, isTankerOrderOpen } from './tankerOrderMenu.js';
+import { ensureBonusBalance } from '../systems/fuelOrderSystem.js';
 import {
   getUnlocked, setUnlocked, migrateCampaignSave, isEndlessUnlocked, getEndlessBest
 } from '../systems/campaignSave.js';
+import { clearRunEconomy } from '../systems/runEconomySave.js';
 
 export const UI = {};
 
@@ -60,21 +66,50 @@ function setUnlockedLevel(n) {
   setUnlocked(n);
 }
 
+/** Автоподстройка под DPI / размер экрана: canvas DPR + CSS --ui-scale для HUD. */
 function resize() {
+  const vv = window.visualViewport;
   const rect = UI.stage.getBoundingClientRect();
-  UI.cssW = Math.max(1, rect.width);
-  UI.cssH = Math.max(1, rect.height);
-  UI.dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-  UI.cv.width = Math.round(UI.cssW * UI.dpr);
-  UI.cv.height = Math.round(UI.cssH * UI.dpr);
+  // visualViewport точнее на Android WebView при системном масштабе / cutout
+  UI.cssW = Math.max(1, vv ? Math.min(rect.width, vv.width) : rect.width);
+  UI.cssH = Math.max(1, vv ? Math.min(rect.height, vv.height) : rect.height);
+
+  const rawDpr = (vv && vv.scale > 0)
+    ? (window.devicePixelRatio || 1) * vv.scale
+    : (window.devicePixelRatio || 1);
+  UI.dpr = Math.min(Math.max(rawDpr, 1), CANVAS.maxDevicePixelRatio);
+
+  UI.cv.width = Math.max(1, Math.round(UI.cssW * UI.dpr));
+  UI.cv.height = Math.max(1, Math.round(UI.cssH * UI.dpr));
   UI.scale = Math.min(UI.cssW / UI.LW, UI.cssH / UI.LH);
   UI.ox = (UI.cssW - UI.LW * UI.scale) / 2;
   UI.oy = (UI.cssH - UI.LH * UI.scale) / 2;
+
+  // UI density: mdpi≈1 при ширине designWidth; clamp чтобы HUD не ломался на 2K/ldpi
+  const uiScale = clamp(UI.cssW / CANVAS.designWidth, 0.82, 1.4);
+  const root = document.documentElement;
+  if (root?.style?.setProperty) {
+    root.style.setProperty('--ui-scale', uiScale.toFixed(3));
+    root.style.setProperty('--dpr', String(UI.dpr));
+  }
+  if (root && root.dataset) {
+    root.dataset.density = UI.dpr >= 2.5 ? 'xxxhdpi'
+      : UI.dpr >= 2 ? 'xxhdpi'
+        : UI.dpr >= 1.5 ? 'xhdpi'
+          : UI.dpr >= 1.0 ? 'hdpi' : 'mdpi';
+  }
+}
+
+function fmtBonuses(n) {
+  return Math.round(n || 0).toLocaleString('ru-RU');
 }
 
 function updateHUD() {
-  UI.statMoney.textContent = '💰 ' + fmtRub(Game.money) +
-    (Game.bonuses > 0 ? ' · ★' + Math.round(Game.bonuses) : '');
+  ensureBonusBalance();
+  UI.statMoney.textContent = '💰 ' + fmtRub(Game.money);
+  if (UI.statBonuses) {
+    UI.statBonuses.textContent = '★ БОНУСЫ: ' + fmtBonuses(Game.bonuses);
+  }
   if (Game.state === 'play') {
     UI.statTime.textContent = '⛽ ' + getServedHudText();
   } else {
@@ -100,15 +135,23 @@ function updateHUD() {
   if (tankerReady) UI.btnTanker.classList.add('tanker-ready');
   else UI.btnTanker.classList.remove('tanker-ready');
 
-  // ГБР — стоимость, READY или таймер подготовки
-  UI.gbrSub.textContent = gbrButtonSub(fmtRub);
-  const nextGbrCost = gbrCallCost();
-  if (Game.state !== 'play') {
-    UI.btnGbr.disabled = true;
-  } else if (canDispatchGbr() && Game.money < nextGbrCost) {
-    UI.btnGbr.disabled = true;
-  } else {
-    UI.btnGbr.disabled = false;
+  // ГБР — A/B/C/D: красная + цена при READY; серая «Рейд» / таймер иначе
+  const gbrSt = getGbrButtonState(fmtRub);
+  if (UI.gbrTitle) UI.gbrTitle.textContent = gbrSt.title;
+  UI.gbrSub.textContent = gbrSt.lines.length ? gbrSt.lines.join('\n') : '—';
+  const gbrAfford = gbrSt.cost == null || Game.money >= gbrSt.cost;
+  const gbrActive = Game.state === 'play' && gbrSt.canCall && gbrAfford;
+  UI.btnGbr.disabled = Game.state !== 'play' || !gbrSt.canCall || !gbrAfford;
+  if (gbrActive) UI.btnGbr.classList.add('gbr-ready');
+  else UI.btnGbr.classList.remove('gbr-ready');
+
+  // 2x ускорение — лимит реального времени на уровень
+  if (UI.btnSpeed) {
+    UI.btnSpeed.textContent = speedBoostLabel();
+    const boostOk = Game.state === 'play' && canEnableSpeedBoost();
+    UI.btnSpeed.disabled = !boostOk;
+    if (isSpeedBoostActive()) UI.btnSpeed.classList.add('speed-active');
+    else UI.btnSpeed.classList.remove('speed-active');
   }
 
   const Lt = Game.light;
@@ -229,6 +272,7 @@ function renderPatchNotes() {
 
 function showMenu() {
   Game.state = 'menu';
+  clearRunEconomy();
   renderMenu();
   UI.screenEnd.classList.add('hidden');
   UI.screenStart.classList.remove('hidden');

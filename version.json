@@ -1,7 +1,10 @@
 {
-  "version": "0.4.1",
+  "version": "0.4.4.1",
   "notes": [
-    "Flexible tanker fuel order + bonus cashback",
-    "Start money 50000"
+    "Entry on L2 with merge-in to L1/L0",
+    "Multi-Scalper by budget; undercover without AZS",
+    "Undercover countsForDefeat; no undercover despawn",
+    "Endgate last-10/20 officially abandoned",
+    "Extended end-level statistics button"
   ]
 }

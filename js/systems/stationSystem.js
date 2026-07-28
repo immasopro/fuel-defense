@@ -3,11 +3,13 @@ import { Game } from '../core/gameState.js';
 import { Road, pumpPose, apronPoseForRank, approachStopS } from '../world/roadNetwork.js';
 import { mod, shortAngle } from '../core/utils.js';
 import { laneGapFree, crossed } from '../vehicles/vehicle.js';
-import { outerLaneList } from './trafficSystem.js';
+import { laneList } from './trafficSystem.js';
+import { serviceLane, exitLane, normalizeLane, isServiceLane } from '../world/lanes.js';
+import { beginLaneShift } from '../vehicles/vehicle.js';
 import { finishFuel } from './economySystem.js';
 import { refillCanisterReserve } from '../stations/reservoir.js';
 import { cleanupVehicle, scanForStation, tryApproachPocket, tryApproachPullIn,
-  beginLaneChange, beginPullOut, processStationPocket } from '../stations/stationQueue.js';
+  beginPullOut, processStationPocket, releasePocket } from '../stations/stationQueue.js';
 import { StationApi } from './stationApi.js';
 import { ScalperPhase, GbrPhase } from './entityFsm.js';
 import { ScalperOwner, completeStationExit, getScalperOwner, isScalperLeavingMap, updateScalpersLeavingMap } from './scalperLifecycle.js';
@@ -23,13 +25,12 @@ import {
 export function updateVehicles(dt, L) {
   const removeSet = new Set();
   updateScalpersLeavingMap(dt, L, removeSet);
-  const outer = outerLaneList();
   for (const v of Game.vehicles) {
     if (removeSet.has(v)) continue;
     if (v.kind === 'gbr') updateGBR(v, dt, L, removeSet);
     if (removeSet.has(v)) continue;
     if (v.state === 'drive') {
-      if (v.lane === 'inner') {
+      if (isServiceLane(normalizeLane(v.lane))) {
         if (v.kind === 'car') {
           if (!v.served && !v.pump && !v.pocketSlot && !v.angry && !v.overtake) {
             v.scanT -= dt;
@@ -42,12 +43,21 @@ export function updateVehicles(dt, L) {
             v.mergeT -= dt;
             if (v.mergeT <= 0) {
               v.mergeT = 0.3;
-              if (laneGapFree(outer, mod(v.s + 14, L), v.len)) beginLaneChange(v);
+              if (laneGapFree(laneList(exitLane()), mod(v.s + 14, L), v.len)) beginLaneShift(v, exitLane());
             }
           }
         } else if (v.kind === 'scalper' && !isScalperLeavingMap(v)) {
-          if (v.pocketSlot && !v.pump) tryApproachPocket(v, L);
-          else if (v.pump) {
+          if (v.pocketSlot && !v.pump) {
+            // Страховка: долгий подход к карману без pullIn
+            v.pocketApproachT = (v.pocketApproachT || 0) + dt;
+            const maxApproach = CONFIG.scalper.pocketApproachMax ?? CONFIG.station.pocketMaxWait;
+            if (v.pocketApproachT > maxApproach) {
+              releasePocket(v);
+              v.tourIdx = (v.tourIdx || 0) + 1;
+            } else {
+              tryApproachPocket(v, L);
+            }
+          } else if (v.pump) {
             const ctx = StationApi.getColumnContext(v);
             if (ctx && ctx.rank > 0) v.stopS = approachStopS(v.targetSlot);
             else tryApproachPullIn(v, L);
@@ -99,7 +109,7 @@ export function updateVehicles(dt, L) {
         continue;
       }
       const { pump, st, rank } = ctx;
-      const desired = apronPoseForRank(v.targetSlot, v.pumpJ, rank);
+      const desired = apronPoseForRank(v.targetSlot, v.pumpJ, rank, pump.cars);
       const dx = desired.x - v.pose.x, dy = desired.y - v.pose.y;
       const dist = Math.hypot(dx, dy);
       if (dist > 1.5) {
@@ -127,7 +137,7 @@ export function updateVehicles(dt, L) {
       if (v.mergeT <= 0) {
         v.mergeT = 0.25;
         const ms = mod(v.targetSlot.s + 16, L);
-        if (laneGapFree(outer, ms, v.len)) beginPullOut(v, ms);
+        if (laneGapFree(laneList(exitLane()), ms, v.len)) beginPullOut(v, ms);
       }
     } else if (v.state === 'pullOut') {
       v.animT += dt;
@@ -139,7 +149,7 @@ export function updateVehicles(dt, L) {
         } else if (v.kind === 'tanker') {
           finishTankerPullOut(v, L, removeSet);
         } else if (v.kind === 'car') {
-          v.lane = 'outer';
+          v.lane = exitLane();
           v.state = 'drive';
           v.s = v.exitS; v.prevS = v.s; v.v = 25;
           v.trip = 0; v.stopS = null;
@@ -147,7 +157,7 @@ export function updateVehicles(dt, L) {
           v.pocketSlot = null;
           v.percGap = 1e9; v.percT = 0;
         } else {
-          v.lane = v.tourIdx >= (v.tour ? v.tour.length : 0) ? 'outer' : 'inner';
+          v.lane = v.tourIdx >= (v.tour ? v.tour.length : 0) ? exitLane() : serviceLane();
           v.state = 'drive';
           v.s = v.exitS; v.prevS = v.s; v.v = 25;
           v.trip = 0; v.stopS = null;
