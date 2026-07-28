@@ -1,7 +1,8 @@
 {
-  "version": "0.4.1",
+  "version": "0.4.4.2",
   "notes": [
-    "Flexible tanker fuel order + bonus cashback",
-    "Start money 50000"
+    "CHASE GBR: weaker bumper-cap, aggressive overtake",
+    "GBR free-lane pursuit (not locked to target lane)",
+    "Road arrest via cut-off block then ARRESTING"
   ]
 }
