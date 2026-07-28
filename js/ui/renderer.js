@@ -12,6 +12,7 @@ import { UI } from './hud.js';
 import { drawDebugOverlay } from '../debug/debugOverlay.js';
 import { laneLat, normalizeLane, serviceLane, exitLane, isExitLane, roadStrokeWidth, laneCount } from '../world/lanes.js';
 import { hasSiren } from '../vehicles/vehicle.js';
+import { stationNeedsGbrCall } from '../systems/gbrPursuit.js';
 
 function vehiclePose(v) {
   if (v.kind === 'gbr' && v.pose) return v.pose;
@@ -21,7 +22,9 @@ function vehiclePose(v) {
   if (v.state === 'station' || v.state === 'block' || v.state === 'waitMerge' || v.state === 'pocket')
     return v.pose;
   const baseLat = laneLat(normalizeLane(v.lane));
-  const lat = baseLat + (v.latOff || 0);
+  // visualRoll: лёгкий «крен» как доп. lat-смещение к центру поворота
+  const roll = v.visualRoll || 0;
+  const lat = baseLat + (v.latOff || 0) + roll * 2.2;
   const p = Road.posAt(v.s, lat);
   if (v.visualSteer) p.a += v.visualSteer;
   return p;
@@ -454,6 +457,35 @@ function drawSlot(ctx, slot) {
   }
 
   drawStationTank(ctx, slot, st);
+  drawGbrCallAlarm(ctx, slot);
+}
+
+/** Мигающая мигалка у АЗС — нужен вызов ГБР (v0.4.5). */
+function drawGbrCallAlarm(ctx, slot) {
+  if (!stationNeedsGbrCall(slot)) return;
+  const p = slot.pos;
+  if (!p) return;
+  const blink = Math.floor(Game.time * 6) % 2 === 0;
+  const pulse = 1 + Math.sin(Game.time * 9) * 0.12;
+  const ox = p.x + Math.cos(p.a - Math.PI / 2) * 28;
+  const oy = p.y + Math.sin(p.a - Math.PI / 2) * 28;
+  ctx.save();
+  ctx.translate(ox, oy);
+  ctx.globalAlpha = blink ? 1 : 0.45;
+  // «люстра» мигалки
+  ctx.fillStyle = '#eceff1';
+  rr(ctx, -7 * pulse, -4, 14 * pulse, 8, 2);
+  ctx.fill();
+  ctx.fillStyle = blink ? '#ef5350' : '#42a5f5';
+  ctx.beginPath();
+  ctx.arc(-3, 0, 3.2 * pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = blink ? '#42a5f5' : '#ef5350';
+  ctx.beginPath();
+  ctx.arc(3, 0, 3.2 * pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.globalAlpha = 1;
 }
 
 function drawTrafficLightIndicator(ctx, x, y) {
@@ -499,6 +531,12 @@ function drawVehicle(ctx, v) {
   ctx.save();
   ctx.translate(p.x, p.y);
   ctx.rotate(p.a);
+  // v0.4.5: клевок при торможении — сдвиг массы вперёд + лёгкое сжатие
+  const dip = clamp01(v.visualBrakeDip || 0);
+  if (dip > 0.02) {
+    ctx.translate(dip * 1.8, 0);
+    ctx.scale(1 - dip * 0.1, 1 + dip * 0.05);
+  }
   if (isExitLane(normalizeLane(v.lane)) && v.kind === 'car') ctx.globalAlpha = .85;
 
   if (v.kind === 'tanker') {
@@ -512,9 +550,16 @@ function drawVehicle(ctx, v) {
     const k = v.load / (v.capacity || Depot.cap());
     ctx.fillRect(-v.len / 2 + 3, -1.5, (v.len - 18) * k, 3);
   } else if (v.kind === 'gbr') {
-    ctx.fillStyle = '#37474f';
+    // v0.4.5: белый кузов + чёрная крыша
+    ctx.fillStyle = '#f5f7fa';
     rr(ctx, -v.len / 2, -v.w / 2, v.len, v.w, 3);
     ctx.fill();
+    ctx.fillStyle = '#1a1d24';
+    rr(ctx, -v.len * 0.12, -v.w / 2, v.len * 0.55, v.w, 2);
+    ctx.fill();
+    // лобовое
+    ctx.fillStyle = 'rgba(66,165,245,.35)';
+    ctx.fillRect(v.len / 2 - 7, -v.w / 2 + 1.5, 4, v.w - 3);
     if (hasSiren(v)) {
       const blink = Math.floor(Game.time * 10) % 2 === 0;
       ctx.fillStyle = blink ? '#ef5350' : '#42a5f5';

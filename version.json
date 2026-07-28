@@ -1,8 +1,8 @@
 {
-  "version": "0.4.4.2",
+  "version": "0.4.5",
   "notes": [
-    "CHASE GBR: weaker bumper-cap, aggressive overtake",
-    "GBR free-lane pursuit (not locked to target lane)",
-    "Road arrest via cut-off block then ARRESTING"
+    "Motion feel: steer/roll, commit curve, brake nose-dip",
+    "Diesel brown; GBR white body + black roof",
+    "Flashing GBR-call icon at AZS while wanted unpursued"
   ]
 }

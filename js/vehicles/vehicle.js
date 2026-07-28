@@ -27,7 +27,8 @@ function baseVehicle(kind, p) {
     mergeIn: false, // v0.4.4.1: после въезда с L2 стремимся внутрь
     mergeRetryT: 0,
     lanePatienceT: 0, // терпение за медленным лидером перед уходом на L2
-    missedStation: false, visualSteer: 0,
+    missedStation: false, visualSteer: 0, visualRoll: 0, visualBrakeDip: 0,
+    prevVFeel: null,
     countsForDefeat: true, holderPriority: 0, pocketWaitT: 0,
     served: false
   }, p);
@@ -362,22 +363,44 @@ function beginLaneShift(v, toLane, opts = {}) {
   return true;
 }
 
+/** Кривая манёвра: медленный вход → уверенный commit → мягкий выход (не soap-smooth). */
+function commitLaneU(u) {
+  u = clamp01(u);
+  if (u < 0.22) return smooth(u / 0.22) * 0.18;
+  if (u < 0.78) return 0.18 + ((u - 0.22) / 0.56) * 0.64;
+  return 0.82 + smooth((u - 0.78) / 0.22) * 0.18;
+}
+
+function motionFeelCfg() {
+  return CONFIG.motionFeel || {};
+}
+
 function tickLaneChange(v, dt, L) {
   if (!v.laneChange) return;
+  const MF = motionFeelCfg();
   const lc = v.laneChange;
   lc.t += dt;
   const u = clamp01(lc.t / lc.dur);
   const fromLat = laneLat(lc.from);
   const toLat = laneLat(lc.to);
+  const cu = commitLaneU(u);
   // latOff relative to committed lane (still `from` until complete)
-  v.latOff = (toLat - fromLat) * smooth(u);
-  v.visualSteer = lerp(v.visualSteer || 0, Math.sign(toLat - fromLat) * -0.15, Math.min(1, dt * 7));
+  v.latOff = (toLat - fromLat) * cu;
+  const steerAmp = MF.laneSteer ?? 0.32;
+  const sign = Math.sign(toLat - fromLat) || 1;
+  // Пик руля в середине манёвра
+  const steerPeak = Math.sin(Math.PI * clamp01(u)) * steerAmp;
+  const steerLerp = MF.steerLerp ?? 10;
+  v.visualSteer = lerp(v.visualSteer || 0, -sign * steerPeak, Math.min(1, dt * steerLerp));
+  const rollTarget = (v.visualSteer || 0) * (MF.rollFromSteer ?? 0.55);
+  v.visualRoll = lerp(v.visualRoll || 0, rollTarget, Math.min(1, dt * (MF.rollLerp ?? 8)));
   if (u >= 1) {
     v.lane = lc.to;
     v.latOff = 0;
     v.laneChange = null;
     v.yieldForGbr = false;
-    v.visualSteer = 0;
+    v.visualSteer = lerp(v.visualSteer || 0, 0, Math.min(1, dt * steerLerp));
+    v.visualRoll = lerp(v.visualRoll || 0, 0, Math.min(1, dt * (MF.rollLerp ?? 8)));
   }
 }
 
@@ -409,6 +432,7 @@ function updateLane(list, dt) {
 
     let targetSteer = 0;
     const dur = overtakeDuration(v, F);
+    const MF = motionFeelCfg();
     if (v.overtake && !v.laneChange) {
       v.overtakeT += dt;
       const chase = isChasePriorityGbr(v);
@@ -417,12 +441,15 @@ function updateLane(list, dt) {
       const fromL = v.overtakeFromLane != null ? v.overtakeFromLane : v.lane;
       const toL = v.overtakeToLane != null ? v.overtakeToLane : overtakeTargetLane(v);
       const latSpan = laneLat(toL) - laneLat(fromL);
+      const steerOut = MF.overtakeSteerOut ?? 0.38;
+      const steerPass = MF.overtakeSteerPass ?? 0.2;
       if (v.overtake === 'out') {
-        targetSteer = Math.sign(latSpan || -1) * -0.22;
-        v.latOff = lerp(0, latSpan, smooth(clamp01(v.overtakeT / (dur * tOut))));
+        targetSteer = Math.sign(latSpan || -1) * -steerOut;
+        const ou = commitLaneU(clamp01(v.overtakeT / (dur * tOut)));
+        v.latOff = latSpan * ou;
         if (v.overtakeT >= dur * tOut) v.overtake = 'pass';
       } else if (v.overtake === 'pass') {
-        targetSteer = Math.sign(latSpan || -1) * -0.12;
+        targetSteer = Math.sign(latSpan || -1) * -steerPass;
         v.latOff = latSpan;
         let passDone = v.overtakeT >= dur * tPass;
         if (chase && leader) {
@@ -452,9 +479,9 @@ function updateLane(list, dt) {
           }
         }
       } else if (v.overtake === 'in') {
-        const t = clamp01((v.overtakeT - dur * tPass) / (dur * (1 - tPass)));
-        targetSteer = lerp(Math.sign(latSpan || -1) * -0.12, 0, smooth(t));
-        v.latOff = lerp(latSpan, 0, smooth(t));
+        const t = commitLaneU(clamp01((v.overtakeT - dur * tPass) / (dur * (1 - tPass))));
+        targetSteer = lerp(Math.sign(latSpan || -1) * -steerPass, 0, t);
+        v.latOff = latSpan * (1 - t);
         if (t >= 1) {
           v.overtake = null; v.overtakeT = 0; v.overtakeCommitted = false; v.latOff = 0;
           v.overtakeFromLane = null; v.overtakeToLane = null;
@@ -470,7 +497,10 @@ function updateLane(list, dt) {
       }
     }
     if (!v.laneChange) {
-      v.visualSteer = lerp(v.visualSteer || 0, targetSteer, Math.min(1, dt * 7));
+      const steerLerp = MF.steerLerp ?? 10;
+      v.visualSteer = lerp(v.visualSteer || 0, targetSteer, Math.min(1, dt * steerLerp));
+      const rollTarget = (v.visualSteer || 0) * (MF.rollFromSteer ?? 0.55);
+      v.visualRoll = lerp(v.visualRoll || 0, rollTarget, Math.min(1, dt * (MF.rollLerp ?? 8)));
     }
 
     const gapMin = followGapMin(v, F);
@@ -509,6 +539,19 @@ function updateLane(list, dt) {
     }
     v.v += clamp(vt - v.v, -v.brake * dt, v.accel * dt);
     if (v.v < 0) v.v = 0;
+
+    // v0.4.5: клевок носа при жёстком торможении
+    {
+      const MF2 = motionFeelCfg();
+      const prev = v.prevVFeel != null ? v.prevVFeel : v.v;
+      const accelFeel = (v.v - prev) / Math.max(dt, 1e-3);
+      v.prevVFeel = v.v;
+      const thr = MF2.brakeAccel ?? -28;
+      const scale = MF2.brakeDipScale ?? 90;
+      let dipT = 0;
+      if (accelFeel < thr) dipT = clamp01((-accelFeel + thr) / scale);
+      v.visualBrakeDip = lerp(v.visualBrakeDip || 0, dipT, Math.min(1, dt * (MF2.brakeLerp ?? 12)));
+    }
 
     // Cap step to avoid tunneling between collision checks
     const stepCap = maxStep(v, dt);

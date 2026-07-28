@@ -315,3 +315,27 @@ Overlay shows lane, latOff, overtake, bumper, gap, siren, chase phase/target, Sc
 - Float «Подрезание!» on road; station path unchanged (distance / column).
 - Euclidean `arrestDist` remains fallback when already blocking + close (tests / overlap).
 
+---
+
+## 0.4.5 — Motion feel + telegraph colors (2026-07-28)
+
+### Goals
+Roadmap segment **A**: less soap motion; diesel/GBR/AZS call cue readable.
+
+### Motion feel (`CONFIG.motionFeel`)
+- Lane/overtake use **commitLaneU** instead of pure `smooth`.
+- Stronger `visualSteer` / `visualRoll`; brake **nose-dip** from Δv (`visualBrakeDip`).
+- Pose uses roll as slight lat bias; draw applies dip scale.
+
+### Colors / chrome lite
+- `fuels.diesel.color` → `#6d4c41`.
+- GBR draw: white body `#f5f7fa` + black roof; CHASE siren kept.
+
+### AZS GBR-call alarm
+- `stationNeedsGbrCall(slot)` — unpursued wanted with `alarmStationId` / station link.
+- `drawGbrCallAlarm` — flashing red/blue bar near slot until pursued.
+
+### QA
+- `scripts/qa-audit-045-motion-telegraph.mjs`
+- Headless block in `test_headless.js`
+

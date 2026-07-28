@@ -172,3 +172,10 @@ Monetization (interstitial / rewarded life / rewarded 2x) remains **post product
 - Fuel colours: `js/config/balance.js` → `fuels.diesel.color`
 - GBR alarm stub: `station.gbrAlarm` in `gbrPursuit.js` / `stationSystem.js` (not rendered yet)
 - Wanted / station link: `alarmStationId` on scalper after theft
+
+---
+
+## Patch log
+
+### 0.4.5 shipped
+See `ARCHITECTURE_NOTES.md` § 0.4.5 and release notes.

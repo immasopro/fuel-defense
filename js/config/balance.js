@@ -67,7 +67,7 @@ export const balance = {
   fuels: {
     a92:    { name: 'АИ-92',  short: '92', color: '#4caf50', price: 90 },
     a95:    { name: 'АИ-95',  short: '95', color: '#42a5f5', price: 113 },
-    diesel: { name: 'Дизель', short: 'ДТ', color: '#ff9800', price: 104 }
+    diesel: { name: 'Дизель', short: 'ДТ', color: '#6d4c41', price: 104 }
   },
   canister: { prob: 0.30, red: 10, green: 20 },
 
@@ -275,6 +275,20 @@ export const balance = {
     /** Макс. перемещение за tick (доля len) — anti-tunnel / anti stall-jump */
     maxStepLenFrac: 0.45,
     laneChangeDur: 1.1
+  },
+
+  /** v0.4.5 — язык тела машин (не полная физика) */
+  motionFeel: {
+    laneSteer: 0.32,
+    overtakeSteerOut: 0.38,
+    overtakeSteerPass: 0.2,
+    steerLerp: 10,
+    rollFromSteer: 0.55,
+    rollLerp: 8,
+    /** Торможение: порог ускорения (px/s²) и сила клевка */
+    brakeAccel: -28,
+    brakeDipScale: 90,
+    brakeLerp: 12
   },
 
   ui: { tapRadius: 48, tankLabelTime: 3 }

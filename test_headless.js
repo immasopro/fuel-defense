@@ -831,11 +831,11 @@ assert(despawnLog, 'Despawn complete logged');
 // version check
 const { compareVersions, isNewerVersion, GAME_VERSION, hasPendingUpdate, _setRemoteVersionForTest } =
   await import('./js/systems/versionCheck.js');
-assert(GAME_VERSION === '0.4.4.2', 'GAME_VERSION 0.4.4.2');
-assert(compareVersions('0.4.4.2', '0.4.4.1') > 0, 'semver newer than 0.4.4.1');
-assert(!isNewerVersion('0.4.4.2'), 'same version not newer');
-assert(isNewerVersion('0.4.5'), '0.4.5 is newer');
-_setRemoteVersionForTest({ version: '0.4.5', notes: ['Тест'] });
+assert(GAME_VERSION === '0.4.5', 'GAME_VERSION 0.4.5');
+assert(compareVersions('0.4.5', '0.4.4.2') > 0, 'semver newer than 0.4.4.2');
+assert(!isNewerVersion('0.4.5'), 'same version not newer');
+assert(isNewerVersion('0.4.6'), '0.4.6 is newer');
+_setRemoteVersionForTest({ version: '0.4.6', notes: ['Тест'] });
 assert(hasPendingUpdate(), 'pending update detected');
 
 // v0.2.8 depot branch + reservoir HUD
@@ -907,7 +907,7 @@ assert(Game.time > 0, 'game advances after rAF frames');
 globalThis.window.requestAnimationFrame = prevRaf;
 
 const { GameVersion } = await import('./js/config/gameVersion.js');
-assert(GameVersion.version === '0.4.4.2', 'GameVersion is 0.4.4.2');
+assert(GameVersion.version === '0.4.5', 'GameVersion is 0.4.5');
 assert(GameVersion.changes.length <= 8, 'patch notes capped at 8 items');
 
 const { StationApi } = await import('./js/systems/stationApi.js');
@@ -1358,10 +1358,10 @@ const migrated = migrateSaveObject({ version: '0.2.11', depot: { level: 2, res: 
 assert(migrated.tankerTruck.level === 1, 'migration tanker level I');
 assert(migrated.fleet.level === 1, 'migration fleet level I');
 assert(migrated.depot.res <= migrated.depot.cap, 'migration clamps fuel');
-assert(isNewerVersion('0.4.5'), 'semver newer');
-assert(!isNewerVersion('0.4.4.2'), 'same version not newer');
+assert(isNewerVersion('0.4.6'), 'semver newer');
+assert(!isNewerVersion('0.4.5'), 'same version not newer');
 _resetVersionNotificationForTest();
-showVersionNotification('0.4.4.2');
+showVersionNotification('0.4.5');
 assert(true, 'version notification once per session');
 
 // v0.4.2.1 — аварийный обмен бонусов
@@ -2341,6 +2341,64 @@ for (let i = 0; i < 20; i++) {
   // May lane-change or stay — must NOT teleport to target.lane every frame without anim
   assert(gCut.lane === 0 || gCut.laneChange || gCut.lane === scCut.lane,
     '0442 free-lane pursuit (lane=' + gCut.lane + ')');
+}
+
+// ─── v0.4.5 — motion feel + telegraph colors + AZS alarm ───
+{
+  const { stationNeedsGbrCall } = await import('./js/systems/gbrPursuit.js');
+  const { beginLaneShift, updateLane } = await import('./js/vehicles/vehicle.js');
+  const { laneList } = await import('./js/systems/trafficSystem.js');
+
+  assert(CONFIG.fuels.diesel.color.toLowerCase() === '#6d4c41', '045 diesel brown');
+  assert(CONFIG.motionFeel && CONFIG.motionFeel.laneSteer >= 0.25, '045 motionFeel config');
+
+  FD.newGame('campaign', 1);
+  const car = FD.makeCar(0);
+  car.lane = 0;
+  car.state = 'drive';
+  car.s = 100;
+  car.prevS = 100;
+  car.v = 40;
+  Game.vehicles = [car];
+  assert(beginLaneShift(car, 1, { dur: 1.0 }), '045 start lane shift');
+  updateLane(laneList(0), 0.35);
+  assert(Math.abs(car.visualSteer || 0) > 0.05, '045 steer during lane change');
+  assert(car.laneChange, '045 laneChange active');
+
+  // Hard brake → nose dip
+  car.v = 80;
+  car.prevVFeel = 80;
+  car.visualBrakeDip = 0;
+  car.maxV = 80;
+  car.brake = 200;
+  // Force follow stop: put wall leader
+  const wall = FD.makeCar(0);
+  wall.lane = car.lane;
+  wall.state = 'drive';
+  wall.s = car.s + 25;
+  wall.prevS = wall.s;
+  wall.v = 0;
+  wall.maxV = 0;
+  wall.len = 20;
+  Game.vehicles = [car, wall];
+  for (let i = 0; i < 20; i++) updateLane(laneList(car.lane), 1 / 30);
+  assert((car.visualBrakeDip || 0) > 0.05 || car.v < 50, '045 brake dip or slowdown');
+
+  // AZS GBR-call alarm
+  FD.newGame('campaign', 1);
+  FD.actionBuildStation(Road.slots[0], 'a92');
+  const slotA = Road.slots[0];
+  const scA = FD.makeScalper();
+  scA.wanted = true;
+  scA.crimeStarted = true;
+  scA.alarmStationId = slotA.i;
+  scA.pursuedBy = null;
+  scA.scalperId = 701;
+  setScalperPhase(scA, ScalperPhase.DRIVING);
+  Game.vehicles = [scA];
+  assert(stationNeedsGbrCall(slotA), '045 AZS needs GBR call when wanted unpursued');
+  scA.pursuedBy = 1;
+  assert(!stationNeedsGbrCall(slotA), '045 alarm clears when pursued');
 }
 
 console.log('\nALL CRITICAL REGRESSION TESTS PASSED');

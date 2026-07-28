@@ -42,6 +42,17 @@ export function findUnpursuedWantedScalpers() {
   return Game.vehicles.filter(isScalperAssignableWanted);
 }
 
+/** АЗС нужна мигалка «вызови ГБР»: wanted без экипажа, привязанный к слоту. */
+export function stationNeedsGbrCall(slot) {
+  if (!slot || !slot.station) return false;
+  for (const sc of findUnpursuedWantedScalpers()) {
+    if (sc.alarmStationId === slot.i) return true;
+    if (sc.targetSlot === slot || sc.pocketSlot === slot) return true;
+    if (sc.station && sc.station.slot === slot) return true;
+  }
+  return false;
+}
+
 /** Разыскиваемый перекуп, ещё на карте, без экипажа (включая EXITING). */
 export function isScalperAssignableWanted(sc) {
   if (!sc || sc.kind !== 'scalper') return false;
