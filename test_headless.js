@@ -824,9 +824,9 @@ assert(despawnLog, 'Despawn complete logged');
 // version check
 const { compareVersions, isNewerVersion, GAME_VERSION, hasPendingUpdate, _setRemoteVersionForTest } =
   await import('./js/systems/versionCheck.js');
-assert(GAME_VERSION === '0.4.4', 'GAME_VERSION 0.4.4');
-assert(compareVersions('0.4.4', '0.4.3.2') > 0, 'semver newer');
-assert(!isNewerVersion('0.4.4'), 'same version not newer');
+assert(GAME_VERSION === '0.4.4.1', 'GAME_VERSION 0.4.4.1');
+assert(compareVersions('0.4.4.1', '0.4.4') > 0, 'semver newer than 0.4.4');
+assert(!isNewerVersion('0.4.4.1'), 'same version not newer');
 assert(isNewerVersion('0.4.5'), '0.4.5 is newer');
 _setRemoteVersionForTest({ version: '0.4.5', notes: ['Тест'] });
 assert(hasPendingUpdate(), 'pending update detected');
@@ -900,7 +900,7 @@ assert(Game.time > 0, 'game advances after rAF frames');
 globalThis.window.requestAnimationFrame = prevRaf;
 
 const { GameVersion } = await import('./js/config/gameVersion.js');
-assert(GameVersion.version === '0.4.4', 'GameVersion is 0.4.4');
+assert(GameVersion.version === '0.4.4.1', 'GameVersion is 0.4.4.1');
 assert(GameVersion.changes.length <= 8, 'patch notes capped at 8 items');
 
 const { StationApi } = await import('./js/systems/stationApi.js');
@@ -1352,9 +1352,9 @@ assert(migrated.tankerTruck.level === 1, 'migration tanker level I');
 assert(migrated.fleet.level === 1, 'migration fleet level I');
 assert(migrated.depot.res <= migrated.depot.cap, 'migration clamps fuel');
 assert(isNewerVersion('0.4.5'), 'semver newer');
-assert(!isNewerVersion('0.4.4'), 'same version not newer');
+assert(!isNewerVersion('0.4.4.1'), 'same version not newer');
 _resetVersionNotificationForTest();
-showVersionNotification('0.4.4');
+showVersionNotification('0.4.4.1');
 assert(true, 'version notification once per session');
 
 // v0.4.2.1 — аварийный обмен бонусов
@@ -2229,6 +2229,61 @@ for (let i = 0; i < 20; i++) {
   endGame(false);
   Boot.restart();
   assert(Game.state === 'play', 'restart ' + i + ' restores play state');
+}
+
+// ─── v0.4.4.1 — entry L2, multi undercover Scalper, run stats ───
+{
+  const { exitLane: el, serviceLane: sl } = await import('./js/world/lanes.js');
+  const { deployToRing: dtr } = await import('./js/systems/trafficSystem.js');
+  const { liveScalperCount, resetScalperRegistry: rsr } =
+    await import('./js/systems/scalperRegistry.js');
+  const { formatExtendedStatsHtml, ensureRunStats, resetRunStats: rrs } =
+    await import('./js/systems/runStats.js');
+  const { tickSpecialSpawns: tss } = await import('./js/systems/specialVehicles.js');
+
+  assert(CONFIG.lanePolicy?.entryOnExitLane === true, '0441 entryOnExitLane');
+  assert(CONFIG.scalper?.undercoverWithoutStation === true, '0441 undercoverWithoutStation');
+
+  FD.newGame('campaign', 1);
+  const car = FD.makeCar();
+  dtr(car);
+  assert(car.lane === el(), '0441 car deploys on exitLane L2');
+  assert(car.mergeIn === true, '0441 car mergeIn after L2 entry');
+
+  // Undercover spawn without AZS
+  FD.newGame('campaign', 1);
+  rsr();
+  rrs();
+  assert(FD.sortedStationSlots().length === 0, '0441 fixture: no stations');
+  Game.scalperTimer = 0;
+  tss(0);
+  assert(Game.scalper.unit, '0441 undercover spawns without AZS');
+  assert(Game.scalper.unit.countsForDefeat !== false, '0441 undercover countsForDefeat');
+  assert(!Game.scalper.unit.wanted, '0441 undercover not wanted');
+  assert(['sedan', 'suv'].includes(Game.scalper.unit.typeKey), '0441 undercover looks like NPC');
+  assert(ensureRunStats().scalpersSpawned >= 1, '0441 runStats scalper spawn');
+
+  // Multi-Scalper: only budget caps (spawn second while first live)
+  Game.scalperTimer = 0;
+  tss(0);
+  assert(liveScalperCount() >= 2, '0441 multiple live Scalpers');
+  assert(Array.isArray(Game.scalper.units) && Game.scalper.units.length >= 2, '0441 registry units');
+
+  // Empty tour does not force EXITING
+  const uc = Game.scalper.unit;
+  assert(!uc.tour.length || uc.tour.length >= 0, '0441 tour may be empty');
+  if (!uc.tour.length) {
+    const { updateScalperTour } = await import('./js/systems/specialVehicles.js');
+    uc.tourIdx = 0;
+    updateScalperTour(uc, Road.length);
+    assert(uc.scalperPhase !== 'EXITING', '0441 empty tour no EXITING');
+  }
+
+  // Extended stats HTML
+  const html = formatExtendedStatsHtml();
+  assert(html.includes('Перекупы') && html.includes('ГБР'), '0441 extended stats html');
+  assert(document.getElementById('btn-end-stats'), '0441 end stats button exists');
+  assert(document.getElementById('end-stats-ext'), '0441 end stats panel exists');
 }
 
 console.log('\nALL CRITICAL REGRESSION TESTS PASSED');

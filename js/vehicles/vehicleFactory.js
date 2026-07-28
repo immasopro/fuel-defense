@@ -69,14 +69,18 @@ function makeScalper() {
   const fuelKey = pickScalperFuel();
   const tour = scalperTourFor(fuelKey);
   const maxLiters = currentScalperMaxLiters();
+  if (Game._nextScalperId == null) Game._nextScalperId = 1;
+  const scalperId = Game._nextScalperId++;
   return baseVehicle('scalper', {
     fuelKey,
     len: C.len, w: 10, maxV: C.speed, accel: C.accel, brake: C.brake, v: C.speed * .4,
     tour, tourIdx: 0, totalGot: 0, maxLiters,
     targetSlot: null, pump: null, pumpJ: 0, waitReserve: false,
     isScalper: true,
-    scalperId: null, wanted: false, pursuedBy: null, alarmStationId: null, crimeStarted: false,
-    scalperOwner: 'special', stationExitActive: false, stationExitReason: null
+    scalperId, wanted: false, pursuedBy: null, alarmStationId: null, crimeStarted: false,
+    scalperOwner: 'special', stationExitActive: false, stationExitReason: null,
+    // визуальный тип как у NPC, пока undercover
+    typeKey: Math.random() < 0.5 ? 'sedan' : 'suv'
   });
 }
 

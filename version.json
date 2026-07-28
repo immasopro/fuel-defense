@@ -1,11 +1,10 @@
 {
-  "version": "0.4.4",
+  "version": "0.4.4.1",
   "notes": [
-    "Three full traffic lanes from level 1 (laneCount param)",
-    "Fix COLL-001 leader loss after soft-snap",
-    "Fix COLL-002 chase overtake soft-resolve until safe latOff",
-    "EXITING Scalper participates in follow; no stall teleport",
-    "GBR CHASE siren + NPC yield-right; PATROL/RETURNING normal traffic",
-    "AZS queue spacing by vehicle lengths"
+    "Entry on L2 with merge-in to L1/L0",
+    "Multi-Scalper by budget; undercover without AZS",
+    "Undercover countsForDefeat; no undercover despawn",
+    "Endgate last-10/20 officially abandoned",
+    "Extended end-level statistics button"
   ]
 }

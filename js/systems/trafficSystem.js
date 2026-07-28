@@ -87,8 +87,17 @@ function isLightGreen() {
 function deployToRing(v) {
   v.state = 'drive';
   // Танкер и ГБР стартуют с сервисной полосы (подъезд к АЗС / базе)
-  if (v.kind === 'tanker' || v.kind === 'gbr') v.lane = serviceLane();
-  else v.lane = pickSpawnLane(v.len || 20);
+  if (v.kind === 'tanker' || v.kind === 'gbr') {
+    v.lane = serviceLane();
+    v.mergeIn = false;
+  } else {
+    // v0.4.4.1: въезд на L2 (exit), затем merge L2→L1→L0
+    const entryExit = CONFIG.lanePolicy?.entryOnExitLane !== false;
+    v.lane = entryExit ? exitLane() : pickSpawnLane(v.len || 20);
+    v.mergeIn = entryExit && normalizeLane(v.lane) === exitLane();
+    v.mergeRetryT = 0;
+    v.lanePatienceT = 0;
+  }
   v.s = Road.spawnS;
   v.prevS = Road.spawnS;
   v.v = v.maxV * .4;

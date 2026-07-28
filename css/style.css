@@ -210,6 +210,11 @@ html.fd-native #btn-fs{display:none!important}
 .lvl-btn:active{transform:scale(.94);filter:brightness(1.25)}
 .lvl-btn:disabled{background:#333a45;color:#8b949e}
 #end-stats{font-size:15px;line-height:1.9}
+#btn-end-stats{margin:10px auto 6px;max-width:320px;display:block;font-size:14px}
+#end-stats-ext{font-size:13px;line-height:1.55;text-align:left;max-width:360px;margin:0 auto 12px;padding:10px 12px;background:rgba(0,0,0,.28);border-radius:10px}
+#end-stats-ext.hidden{display:none}
+.end-ext-block{margin-bottom:10px}
+.end-ext-block:last-child{margin-bottom:0}
 #end-actions{display:flex;flex-direction:column;gap:10px;align-items:stretch}
 .hidden{display:none!important}
 .dot{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}

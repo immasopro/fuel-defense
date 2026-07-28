@@ -10,6 +10,8 @@ import { onGbrBaseLevelUp, gbrBaseUpgradeCost } from './gbrLogistics.js';
 import {
   payWithBonus, canAffordWithBonus, canAffordUpgrade, stationBonusShare, depotBonusShare
 } from './fuelOrderSystem.js';
+import { noteUpgradePurchase } from './runStats.js';
+import { refreshAllUndercoverScalperTours } from './specialVehicles.js';
 
 function resUpgradeCost(st) {
   return st.resLevel >= 5 ? null : CONFIG.station.resCosts[st.resLevel - 1];
@@ -51,6 +53,7 @@ function payDepot(cost, x, y) {
 function payCashOnly(cost, x, y) {
   if (cost == null || Game.money < cost) return false;
   Game.money -= cost;
+  noteUpgradePurchase(cost, 0);
   addFloat(x, y, fmtRubDelta(-cost), '#ef5350');
   return true;
 }
@@ -60,6 +63,7 @@ function actionBuildStation(slot, fuel) {
   if (!payStation(CONFIG.station.cost, slot.pos.x, slot.pos.y - 18)) return false;
   slot.station = new Station(fuel);
   slot.station.slot = slot;
+  refreshAllUndercoverScalperTours();
   return true;
 }
 
@@ -147,6 +151,7 @@ function actionUpgradeGbrBase() {
   const c = gbrBaseUpgradeCost();
   if (c == null || Game.money < c) return false;
   Game.money -= c;
+  noteUpgradePurchase(c, 0);
   Game.gbrBase.level++;
   onGbrBaseLevelUp();
   addFloat(GBRBase.pos.x, GBRBase.pos.y - 20, fmtRubDelta(-c), '#ef5350');

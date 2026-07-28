@@ -17,6 +17,7 @@ import {
 } from './campaignSave.js';
 import { CAMPAIGN_LEVEL_COUNT } from '../config/levels.js';
 import { isScalperLeavingMap } from './scalperLifecycle.js';
+import { formatExtendedStatsHtml } from './runStats.js';
 
 function clientNeedsService(v) {
   if (!isLevelTrafficVehicle(v)) return false;
@@ -196,6 +197,14 @@ function endGame(win, reason) {
   }
 
   UI.endStats.innerHTML = statsHtml;
+  if (UI.endStatsExt) {
+    UI.endStatsExt.innerHTML = formatExtendedStatsHtml();
+    UI.endStatsExt.classList.add('hidden');
+  }
+  if (UI.btnEndStats) {
+    UI.btnEndStats.textContent = '📊 Подробная статистика';
+    UI.btnEndStats.classList.remove('hidden');
+  }
 
   if (win && defeatReason !== 'bankruptcy') {
     if (Game.mode === 'campaign' && Game.levelIdx < CAMPAIGN_LEVEL_COUNT) {

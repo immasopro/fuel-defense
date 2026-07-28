@@ -1,34 +1,84 @@
 # QA 0.4.4 — Road / 3 lanes / Scalper / collisions AUDIT
 
-Generated: 2026-07-27T14:23:32.600Z
-Version: 0.4.4 | laneCount: 3 | L=1754.1
+Generated: 2026-07-27T14:23:32.600Z  
+Version: 0.4.4 | laneCount: 3 | L=1754.1  
+Mode: **audit-only** (no code fixes)  
+Script: `node scripts/qa-audit-044-road.mjs`  
+Raw: `docs/qa-044-road-raw.json`
 
-## Verdict: **FAIL**
+## Verdict: **FAIL (HIGH)** — not CRITICAL-BLOCKED on reproduced lane/collision physics
 
-- Checks: 94
-- FAIL: 1
-- CRITICAL FAIL: 0
-- HIGH FAIL: 1
+| Severity | FAIL count |
+|----------|------------|
+| CRITICAL | **0** |
+| HIGH | **1** (`PICK-EMPTY` — spawn always prefers L0 on empty ring) |
+| Checks | 94 |
+
+### Release reading vs user preliminary BLOCKED
+
+User symptoms were enough to **start** a block investigation. After reproduction:
+
+| User symptom | Audit result |
+|--------------|--------------|
+| 250 regular, zero Scalper | **Reproduced only without AZS.** With ≥1 station Scalper **does** spawn (SC-AZS / SC-GATE-OPEN). Gate: `sortedStationSlots().length`. |
+| L1 cars stuck in `drive` | **Not reproduced as L1-only broken sim.** L0/L1/L2 all update; follow-to-stop works when adjacent blocked; 60s stuck scan = 0. |
+| gap≈1347 vs expected ≈86 | **Not a leader bug.** Follower@1238→leader@1345 gap=**86.0**. Ahead car’s large gap is **ring wrap** (~1626) to the car behind. |
+
+**Conclusion:** do **not** treat “two-lane leftover branch” as confirmed root cause. Confirmed issues are **Scalper AZS gate / UX**, **L0 spawn bias**, and **§24 endgate mismatch** (removed in 0.4.3.3).
+
+---
 
 ## Executive findings
 
-### Scalper spawn
-- `tickSpecialSpawns` gates on `sortedStationSlots().length` (need ≥1 AZS).
-- `newGame` clears all stations → play without building AZS never spawns Scalper; timer only resets.
-- With AZS + budget, Scalper spawn is exercised in this audit (see SC-AZS / SC-GATE-OPEN).
-- §24 last-10/20 endgate from 0.4.2.5 was **removed in 0.4.3.3**; 0.4.4 uses shared `spawned` budget.
+### 1. Scalper spawn (CRITICAL user symptom → explained)
 
-### L1 gap user repro (s=1238 / s=1345)
-- On a 2-car L1 ring, follower@1238 correctly sees leader@1345 with gap≈86.
-- Leader@1345 seeing a large gap is **normal ring wrap** to the car behind (or another forward car), not proof of L1-only broken math.
-- Stopped pairs (`maxV=0`) correctly keep `s` fixed; follow-to-stop on L1 is checked separately.
+- `tickSpecialSpawns` requires `sortedStationSlots().length` before `makeScalper()`.
+- `newGame` clears all stations → **no AZS ⇒ Scalper never appears**; timer only resets (`blockedNoStation` hundreds of times on L1/5/10/20).
+- With AZS + budget + timer: Scalper **appears** (`SC-GATE-OPEN`, `SC-AZS-L*`).
+- Only **one** Scalper at a time (`Game.scalper.unit`); further attempts count as `blockedUnit`.
+- Runtime cooldown = `currentSpawnInterval * spawnIntervalMult(10)` (~40s at start).  
+  `modeCfg.scalper.firstAt` / `intervalStart` in `levels.js` are **dead for runtime** (legacy).
+- QA §24 last-10/20 endgate: **removed in 0.4.3.3**; 0.4.4 uses shared `spawned` budget (`canSpawnScalper === canSpawnMoreCars`).
 
-### Three lanes
-- `update()` iterates `allLaneLists()` → L0/L1/L2 all enter `updateLane`.
-- Motion/leader/stopped tests run per lane.
+### 2. Three lanes are real simulation lanes
+
+- `game.js` `update()` loops `allLaneLists()` → L0/L1/L2 all call `updateLane`.
+- Per-lane motion + leader + stopped-leader(**adjacent blocked**) PASS; no body tunnel.
+- Free-adjacent “pass” is **overtake/lane-change**, not body overlap (1D+lat model).
+
+### 3. L1 gap / stuck (user debug)
+
+- A@1238 len19 → B@1345 len23: `findForwardLeader` gap=**86.0** (expected).
+- B→A wrap gap≈**1626** (order of user “~1347” if another forward car / different L snapshot).
+- Both `maxV=0`: `s` unchanged (parked ≠ stuck-alive).
+- Blocked adjacent: follower stops at gap≈7.8, `v≈1.3`, bodyOv=0.
+
+### 4. Spawn lane bias (HIGH FAIL)
+
+- `pickSpawnLane` on empty ring: **60/60 → L0**.
+- Dense play still uses all three lanes (250 spawn: L0/L1/L2 all >0).
+- Scalper on empty ring also lands L0; when L0 blocked near spawn, deploys to L1/L2.
+
+### 5. GBR / EXITING / FPS / queues
+
+- PATROL/RETURNING: siren off, no yield; CHASE: siren + yield-right.
+- CHASE jam 3-abreast: no body tunnel; assigned Scalper 0/20 pass-through.
+- EXITING in lane lists; no body tunnel; maxJump≪len.
+- FPS 1/60, 0.033, 0.05: 0 overlaps in dense probe.
+- Apron spacing by vehicle lengths PASS.
+
+---
 
 ## Blockers
 - **HIGH PICK-EMPTY**: pickSpawnLane empty ring ALWAYS prefers L0: {"0":60,"1":0,"2":0}. Under light traffic L1/L2 under-spawn until L0 congested near spawnS.
+
+## Recommended next steps (still audit-only here)
+1. Confirm user run had **≥1 built AZS** when claiming zero Scalper; if yes, capture `scalperTimer` / `Game.scalper.unit` / `blocked*` telemetry.
+2. Treat L0-only empty spawn as **HIGH** design/UX for three-lane visibility, not CRITICAL collision.
+3. Clarify product intent for §24 endgate vs 0.4.3.3 shared budget.
+4. Optional: enrich debug with `leaderId`, `v`/`maxV`, `scalperTimer`, `stationsBuilt` to avoid misreading wrap gaps as leader loss.
+
+---
 
 ## All checks
 - [x] **VER** (INFO): GameVersion=0.4.4

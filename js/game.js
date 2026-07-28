@@ -2,7 +2,8 @@ import { CONFIG } from './config/index.js';
 import { SPAWN_START_INTERVAL } from './config/levels.js';
 import { Game } from './core/gameState.js';
 import { Road } from './world/roadNetwork.js';
-import { updateLane, tryYieldToChaseGbr, ensureNumericLane } from './vehicles/vehicle.js';
+import { updateLane, tryYieldToChaseGbr, tryMergeInward, tryPreferInnerLanes,
+  tickLanePatience, ensureNumericLane } from './vehicles/vehicle.js';
 import { allLaneLists, releaseHolderBurst } from './systems/trafficSystem.js';
 import { currentDiff, tickSpawnPipeline, scalperCooldown, syncLevelPhase } from './systems/spawnSystem.js';
 import { updateDefeatTimer, checkFuelCrisis, checkLevelComplete } from './systems/defeatSystem.js';
@@ -15,6 +16,8 @@ import { initSpeedBoost } from './systems/speedBoost.js';
 import { initScalperEvolution } from './systems/scalperEvolution.js';
 import { resetPursuitState, tickGbrPursuit } from './systems/gbrPursuit.js';
 import { resetScalperLifecycleState } from './systems/scalperLifecycle.js';
+import { resetScalperRegistry } from './systems/scalperRegistry.js';
+import { resetRunStats, noteRingPopulation } from './systems/runStats.js';
 import { tickVersionCheck } from './systems/versionCheck.js';
 import { updateHUD } from './ui/hud.js';
 import { updatePanelLive, closePanel } from './ui/stationPanel.js';
@@ -52,7 +55,8 @@ export function newGame(mode, levelIdx) {
   Game.gbr = { unit: null };
   resetPursuitState();
   resetScalperLifecycleState();
-  Game.scalper = { unit: null };
+  resetScalperRegistry();
+  resetRunStats();
   Game.stats = { served: 0, spawned: 0, earned: 0, liters: 0, stolenLiters: 0, stolenDamage: 0 };
   Game.tankLabels = {};
   Game.depotLabel = 0;
@@ -127,7 +131,10 @@ export function update(dt) {
 
   for (const v of Game.vehicles) {
     ensureNumericLane(v);
+    tickLanePatience(v, dt);
     tryYieldToChaseGbr(v, dt);
+    tryMergeInward(v, dt);
+    tryPreferInnerLanes(v, dt);
   }
   for (const list of allLaneLists()) {
     updateLane(list, dt);
@@ -137,6 +144,7 @@ export function update(dt) {
   tickSpawnPipeline(dt, diff);
   releaseHolderBurst();
   tickSpecialSpawns(dt, diff);
+  noteRingPopulation(Game.vehicles.length);
   updateDefeatTimer(dt);
   if (Game.state !== 'play') return;
 

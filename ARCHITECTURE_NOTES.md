@@ -273,3 +273,26 @@ spawnedCars / servedCars / targetCars, DRAINING, fuel crisis, economy, spawn rat
 ### Debug
 Overlay shows lane, latOff, overtake, bumper, gap, siren, chase phase/target, Scalper EXITING/owner/station; on-car lane digit.
 
+---
+
+## 0.4.4.1 — Entry L2, multi undercover Scalper, end stats (2026-07-28)
+
+### Product decisions (PO)
+1. **Multi-Scalper** — several Scalpers may be live at once; only shared `spawned` budget (`canSpawnScalper`) caps them.
+2. **Undercover** — spawn without AZS; look like NPC until crime/`wanted` at station; `countsForDefeat: true` (player cannot tell); no special undercover despawn — accumulate as traffic.
+3. **Entry** — deploy cars/Scalpers on exit lane (L2), then merge L2→L1→L0 when free; if blocked, stay and retry. L2 is for overtake/jam, not default cruise (ПДД РФ spirit).
+4. **A4** — extended end-level stats button ships in this patch.
+5. Endgate last-10/20 remains **officially abandoned** (0.4.3.3+).
+
+### Implementation
+- `scalperRegistry.js` — `Game.scalper.units[]` + compat `unit`.
+- `specialVehicles.tickSpecialSpawns` — no live-unit gate / no AZS gate; empty tour refreshes or cruises (no forced EXIT).
+- `trafficSystem.deployToRing` — `lanePolicy.entryOnExitLane` → L2 + `mergeIn`.
+- `vehicle.js` — `tryMergeInward`, `tryPreferInnerLanes`, `tickLanePatience` (outward overtake after patience).
+- `runStats.js` — per-level ledger; end screen `#btn-end-stats` / `#end-stats-ext`.
+- Build station → `refreshAllUndercoverScalperTours`.
+
+### QA
+- `scripts/qa-audit-0441-entry-scalper.mjs` → `docs/QA_0441_ENTRY_SCALPER_AUDIT.md`
+- Headless regression block in `test_headless.js` (version + entry/multi/stats).
+

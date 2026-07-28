@@ -2,7 +2,7 @@ import { CONFIG } from '../config/index.js';
 import { Game } from '../core/gameState.js';
 import { Road, pocketEntryS, distAhead } from '../world/roadNetwork.js';
 import {
-  laneCount, serviceLane, clampLane, laneLat, normalizeLane
+  laneCount, serviceLane, exitLane, clampLane, laneLat, normalizeLane
 } from '../world/lanes.js';
 import { mod, clamp, clamp01, lerp, smooth, rand } from '../core/utils.js';
 import { laneList } from '../systems/trafficSystem.js';
@@ -24,6 +24,9 @@ function baseVehicle(kind, p) {
     overtakeFromLane: null, overtakeToLane: null,
     laneChange: null, // { from, to, t, dur }
     yieldForGbr: false,
+    mergeIn: false, // v0.4.4.1: после въезда с L2 стремимся внутрь
+    mergeRetryT: 0,
+    lanePatienceT: 0, // терпение за медленным лидером перед уходом на L2
     missedStation: false, visualSteer: 0,
     countsForDefeat: true, holderPriority: 0, pocketWaitT: 0,
     served: false
@@ -163,11 +166,19 @@ function canCommitOvertakeLane(v, toLane, L) {
 function overtakeTargetLane(v) {
   if (v.overtakeToLane != null) return clampLane(v.overtakeToLane);
   ensureNumericLane(v);
-  // Предпочитаем полосу «наружу» (больший индекс), иначе внутрь
-  const right = v.lane + 1;
-  if (right < laneCount()) return right;
-  const left = v.lane - 1;
-  if (left >= 0) return left;
+  // CHASE GBR: предпочитаем наружу (больше индекс), иначе внутрь
+  if (isChasePriorityGbr(v)) {
+    const right = v.lane + 1;
+    if (right < laneCount()) return right;
+    const left = v.lane - 1;
+    if (left >= 0) return left;
+    return v.lane;
+  }
+  // Гражданские: обгон «влево» = наружу (L+1), как левая полоса ПДД РФ
+  const outer = v.lane + 1;
+  if (outer < laneCount()) return outer;
+  const inner = v.lane - 1;
+  if (inner >= 0) return inner;
   return v.lane;
 }
 
@@ -246,9 +257,16 @@ function canStartOvertake(v, leader, gapNow, F) {
     v.overtakeFromLane = v.lane;
     return true;
   }
+  // v0.4.4.1: на L2 для обгона — только после терпения за медленным лидером
+  const LP = CONFIG.lanePolicy || {};
+  const patienceNeed = LP.overtakePatience ?? 2.4;
+  if (toLane > v.lane) {
+    if ((v.lanePatienceT || 0) < patienceNeed) return false;
+  }
   if (Math.random() < CONFIG.overtake.chance) {
     v.overtakeToLane = toLane;
     v.overtakeFromLane = v.lane;
+    v.lanePatienceT = 0;
     return true;
   }
   return false;
@@ -491,7 +509,7 @@ function crossed(v, s) {
  * NPC уступает CHASE GBR: если GBR сзади на той же полосе и справа свободно — сдвиг вправо.
  */
 function tryYieldToChaseGbr(v, dt) {
-  if (!v || v.kind !== 'car' || v.state !== 'drive') return;
+  if (!v || (v.kind !== 'car' && !(v.kind === 'scalper' && !v.wanted)) || v.state !== 'drive') return;
   if (v.overtake || v.laneChange || v.angry || v.pump || v.pocketSlot) return;
   ensureNumericLane(v);
   const right = v.lane + 1;
@@ -516,9 +534,81 @@ function tryYieldToChaseGbr(v, dt) {
   beginLaneShift(v, right, { yieldForGbr: true, dur: CONFIG.follow.laneChangeDur ?? 1.1 });
 }
 
+/**
+ * После въезда с L2 — пытаемся уйти на L1, затем L0 (merge-in).
+ */
+function tryMergeInward(v, dt) {
+  if (!v || v.state !== 'drive') return;
+  if (v.kind !== 'car' && v.kind !== 'scalper') return;
+  if (v.overtake || v.laneChange || v.pump || v.pocketSlot) return;
+  if (v.kind === 'scalper' && v.scalperPhase === ScalperPhase.EXITING) return;
+  ensureNumericLane(v);
+  const LP = CONFIG.lanePolicy || {};
+  // Активный merge после въезда, либо возврат с L2 при свободных внутренних
+  const onOuter = v.lane >= exitLane();
+  const wantMerge = v.mergeIn || onOuter;
+  if (!wantMerge) return;
+  if (v.lane <= serviceLane()) {
+    v.mergeIn = false;
+    return;
+  }
+  v.mergeRetryT = (v.mergeRetryT || 0) - dt;
+  if (v.mergeRetryT > 0) return;
+  const to = v.lane - 1;
+  if (to < 0) { v.mergeIn = false; return; }
+  const retry = LP.mergeRetry ?? 0.85;
+  if (beginLaneShift(v, to, { dur: CONFIG.follow.laneChangeDur ?? 1.1 })) {
+    v.mergeRetryT = retry;
+    if (to <= serviceLane()) v.mergeIn = false;
+  } else {
+    v.mergeRetryT = retry * 0.6;
+    // Полоса занята — остаёмся (в т.ч. на L2), повторим позже
+  }
+}
+
+/**
+ * ПДД РФ: не занимать наружную (L2) без нужды — шанс вернуться внутрь.
+ */
+function tryPreferInnerLanes(v, dt) {
+  if (!v || v.state !== 'drive') return;
+  if (v.kind !== 'car' && !(v.kind === 'scalper' && !v.wanted)) return;
+  if (v.mergeIn || v.overtake || v.laneChange || v.yieldForGbr) return;
+  if (v.pump || v.pocketSlot || v.angry) return;
+  ensureNumericLane(v);
+  if (v.lane < exitLane()) return;
+  const LP = CONFIG.lanePolicy || {};
+  v.mergeRetryT = (v.mergeRetryT || 0) - dt;
+  if (v.mergeRetryT > 0) return;
+  if (Math.random() > (LP.returnInChance ?? 0.45)) {
+    v.mergeRetryT = LP.mergeRetry ?? 0.85;
+    return;
+  }
+  const to = v.lane - 1;
+  if (beginLaneShift(v, to, { dur: CONFIG.follow.laneChangeDur ?? 1.1 })) {
+    v.mergeRetryT = (LP.mergeRetry ?? 0.85) * 1.2;
+  } else {
+    v.mergeRetryT = LP.mergeRetry ?? 0.85;
+  }
+}
+
+/** Тик терпения за медленным лидером (для разрешения ухода на L2). */
+function tickLanePatience(v, dt) {
+  if (!v || v.state !== 'drive') return;
+  if (v.kind !== 'car' && !(v.kind === 'scalper' && !v.wanted)) return;
+  const L = Road.length;
+  const list = laneList(v.lane);
+  const { leader, gap } = findForwardLeader(list, v, L);
+  if (leader && gap < (CONFIG.follow.overtakeTrigger ?? 22) && leader.v < v.maxV * 0.72) {
+    v.lanePatienceT = (v.lanePatienceT || 0) + dt;
+  } else {
+    v.lanePatienceT = Math.max(0, (v.lanePatienceT || 0) - dt * 0.5);
+  }
+}
+
 export {
   baseVehicle, findForwardLeader, outerClearForOvertake, canStartOvertake,
   updateLane, laneGapFree, crossed, isChasePriorityGbr, hasSiren,
-  beginLaneShift, tryYieldToChaseGbr, ensureNumericLane, softResolveActive,
+  beginLaneShift, tryYieldToChaseGbr, tryMergeInward, tryPreferInnerLanes, tickLanePatience,
+  ensureNumericLane, softResolveActive,
   bumperFloor, safeLatOffset, effectiveLat, laterallyConflicts, findLateralForwardLeader
 };

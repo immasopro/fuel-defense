@@ -16,6 +16,7 @@ import { findFreePump } from '../world/map.js';
 
 import { setScalperPhase, ScalperPhase } from './entityFsm.js';
 import { restoreScalperToTour } from './scalperLifecycle.js';
+import { unregisterScalper } from './scalperRegistry.js';
 
 
 
@@ -474,7 +475,7 @@ function removeDealer(sc, removeSet, early, onClaw) {
 
   removeSet.add(sc);
 
-  if (Game.scalper.unit === sc) Game.scalper.unit = null;
+  unregisterScalper(sc);
 
 }
 

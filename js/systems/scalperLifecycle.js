@@ -13,6 +13,8 @@ import { logPursuitEvent, clearScalperWanted } from './gbrPursuit.js';
 import { laneList } from './trafficSystem.js';
 import { commitScalperEscapeTheft } from './economySystem.js';
 import { exitLane, normalizeLane, serviceLane, laneLat } from '../world/lanes.js';
+import { unregisterScalper } from './scalperRegistry.js';
+import { noteScalperEscaped } from './runStats.js';
 
 export const ScalperOwner = {
   SPECIAL: 'special',
@@ -80,12 +82,14 @@ function beginScalperLeavingMap(sc) {
 export function despawnScalper(sc, removeSet) {
   if (!sc) return;
   logPursuitEvent('[SCALPER] Despawn complete');
+  const wasWanted = !!sc.wanted || !!sc.crimeStarted;
   commitScalperEscapeTheft(sc);
   clearScalperWanted(sc);
   setScalperPhase(sc, ScalperPhase.DESPAWN);
   sc.scalperLeavingMap = false;
   removeSet.add(sc);
-  if (Game.scalper.unit === sc) Game.scalper.unit = null;
+  unregisterScalper(sc);
+  if (wasWanted) noteScalperEscaped();
 }
 
 /**

@@ -10,6 +10,7 @@ import {
 import { addFloat } from './economySystem.js';
 import { fmtRubDelta } from '../core/currency.js';
 import { GbrPhase, ScalperPhase, setGbrPhase } from './entityFsm.js';
+import { noteScalperWanted, noteGbrCall } from './runStats.js';
 
 let nextScalperId = 1;
 const MAX_LOG = 60;
@@ -190,6 +191,7 @@ export function spawnGbrUnit(cost, msgPos, preferredScalper) {
   const unit = findReadyGbr();
   if (!unit) return null;
   Game.money -= cost;
+  noteGbrCall(cost);
   const g = makeGBR(unit.id);
   g.dispatchedCost = cost;
   g.s = GBRBase.spawnS;
@@ -246,6 +248,7 @@ export function onScalperTheftDetected(station, scalper) {
   if (station) station.gbrAlarm = 1.5;
   logPursuitEvent('[SCALPER] Theft detected');
   logPursuitEvent('[SCALPER] Wanted = TRUE');
+  noteScalperWanted();
   tryAutoSpawnGbr(station, scalper);
   assignWantedToNearestFreeGbr();
 }

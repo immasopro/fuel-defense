@@ -4,6 +4,7 @@ import { CONFIG } from '../config/index.js';
 import { Game } from '../core/gameState.js';
 import { tankerTruckCapacity, canOrderTanker } from './economySystem.js';
 import { saveRunEconomy } from './runEconomySave.js';
+import { noteUpgradePurchase } from './runStats.js';
 
 export function normalizeOrderPercent(pct) {
   const list = CONFIG.fuelOrder.percents;
@@ -118,6 +119,7 @@ export function payWithBonus(cost, share) {
   Game.money -= cash;
   Game.bonuses = (Game.bonuses || 0) - bonus;
   saveRunEconomy();
+  noteUpgradePurchase(cash, bonus);
   return { ok: true, cash, bonus };
 }
 
@@ -136,6 +138,7 @@ export function payUpgrade(cost, bonusSpend) {
   Game.money -= cash;
   Game.bonuses -= bonus;
   saveRunEconomy();
+  noteUpgradePurchase(cash, bonus);
   return { ok: true, cash, bonus };
 }
 

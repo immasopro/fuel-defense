@@ -19,6 +19,7 @@ import {
 } from './gbrLogistics.js';
 import { manualCallGbr } from './gbrPursuit.js';
 import { saveRunEconomy } from './runEconomySave.js';
+import { noteFuelOrder } from './runStats.js';
 
 /** Фазы кампании: SPAWNING → DRAINING → RESULT (win/over). */
 const LevelPhase = {
@@ -246,6 +247,7 @@ function callTanker(order) {
   if (bonuses > 0) {
     Game.bonuses = (Game.bonuses || 0) + bonuses;
   }
+  noteFuelOrder(liters, cost);
   // Заказ бензовоза снимает топливный кризис-таймер.
   Game.fuelCrisisT = 0;
   saveRunEconomy();

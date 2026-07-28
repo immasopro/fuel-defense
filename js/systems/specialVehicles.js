@@ -4,7 +4,7 @@ import { Road, approachStopS, apronPoseForRank, distAhead, distNearStop } from '
 import { serviceLane, exitLane, laneLat, normalizeLane } from '../world/lanes.js';
 import { GBRBase } from '../world/map.js';
 import { mod, rand } from '../core/utils.js';
-import { makeScalper, makeBgCar } from '../vehicles/vehicleFactory.js';
+import { makeScalper, makeBgCar, pickScalperFuel, scalperTourFor } from '../vehicles/vehicleFactory.js';
 import { finishScalperFuel, addFloat, forfeitScalperTheft } from './economySystem.js';
 import { currentSpawnInterval, scalperCooldown, canSpawnScalper, registerSpawnedCar } from './spawnSystem.js';
 import { onHolderChanged, addToHolder } from './trafficSystem.js';
@@ -24,6 +24,8 @@ import {
   ScalperOwner, initScalperLifecycle, isStationExitActive, isScalperLeavingMap,
   beginStationExit, handoffScalperToRoad, transferScalperOwner, getScalperOwner
 } from './scalperLifecycle.js';
+import { registerScalper } from './scalperRegistry.js';
+import { noteScalperSpawned, noteScalperArrested } from './runStats.js';
 import { fmtRubDelta } from '../core/currency.js';
 
 
@@ -119,9 +121,10 @@ function updateScalperTour(v, dt, L) {
 
     if (!v.tour.length) {
 
-      beginScalperExit(v, L);
+      // v0.4.4.1: без АЗС — undercover кружит как трафик, НЕ EXITING
+      refreshScalperTour(v);
 
-      return;
+      if (!v.tour.length) return;
 
     }
 
@@ -557,6 +560,7 @@ function finishArrest(g, sc, L) {
       fmtRubDelta(pay) + ' оплата перекупа', '#8bc34a');
   }
   forfeitScalperTheft(sc);
+  noteScalperArrested();
 
   SA.releaseColumn(g);
   const arrestedOnStation = !!sc.pose && !!slot;
@@ -737,6 +741,31 @@ function updateGBR(g, dt, L, removeSet) {
 
 
 
+function refreshScalperTour(sc) {
+  if (!sc || sc.kind !== 'scalper') return;
+  const fuelKey = pickScalperFuel();
+  sc.fuelKey = fuelKey;
+  sc.tour = scalperTourFor(fuelKey);
+  sc.tourIdx = 0;
+}
+
+/** После постройки АЗС — дать undercover tour. */
+function refreshAllUndercoverScalperTours() {
+  for (const v of Game.vehicles) {
+    if (v.kind !== 'scalper') continue;
+    if (v.wanted || v.crimeStarted) continue;
+    if (v.scalperPhase === ScalperPhase.EXITING ||
+        v.scalperPhase === ScalperPhase.DESPAWN ||
+        v.scalperPhase === ScalperPhase.ARRESTING) continue;
+    if (!v.tour || !v.tour.length) refreshScalperTour(v);
+  }
+  for (const v of Game.holder) {
+    if (v.kind === 'scalper' && (!v.tour || !v.tour.length)) refreshScalperTour(v);
+  }
+}
+
+
+
 function tickSpecialSpawns(dt) {
 
   if (CONFIG.bgTrafficEnabled) {
@@ -757,30 +786,22 @@ function tickSpecialSpawns(dt) {
 
   Game.scalperTimer -= dt;
 
-  if (Game.scalperTimer <= 0 && !Game.scalper.unit) {
-
-    // v0.4.3.3: Scalper занимает общий бюджет spawned; после target — не создаём.
-    if (sortedStationSlots().length && canSpawnScalper()) {
-
+  if (Game.scalperTimer <= 0) {
+    // v0.4.4.1: несколько Scalper — только budget; АЗС не обязательна (undercover).
+    if (canSpawnScalper()) {
       const sc = makeScalper();
       initScalperLifecycle(sc);
       setScalperPhase(sc, ScalperPhase.SPAWN);
-
-      addToHolder(sc, { priority: false, countsForDefeat: false });
-
-      Game.scalper.unit = sc;
+      // Undercover = обычный трафик → countsForDefeat true
+      addToHolder(sc, { priority: false, countsForDefeat: true });
+      registerScalper(sc);
       registerSpawnedCar();
-
+      noteScalperSpawned();
       setScalperPhase(sc, ScalperPhase.DRIVING);
-
       Game.scalperTimer = scalperCooldown();
-
     } else {
-
       Game.scalperTimer = scalperCooldown();
-
     }
-
   }
 
 }
@@ -799,6 +820,7 @@ function initGbrOnSpawn(g) {
 export {
   updateScalperTour, updateScalperAtColumn, updateScalperWaiting,
   updateGBR, tickSpecialSpawns, initGbrOnSpawn, advanceScalperFromStation,
+  refreshScalperTour, refreshAllUndercoverScalperTours,
   decideAfterArrestExit, onGbrReturnPullOutComplete,
   beginGbrPullIn, tryGbrApproach, scalperIsGbrTarget, scalperOnMap,
   gbrSeesScalper, gbrTargetsInRange, startArrest, tryAttachScalperToStation,

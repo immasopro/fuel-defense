@@ -93,6 +93,14 @@ function bindEvents() {
     }
   });
   bindTap(document.getElementById('btn-menu'), () => showMenu());
+  bindTap(document.getElementById('btn-end-stats'), () => {
+    const ext = UI.endStatsExt || document.getElementById('end-stats-ext');
+    const btn = UI.btnEndStats || document.getElementById('btn-end-stats');
+    if (!ext) return;
+    ext.classList.toggle('hidden');
+    const isOpen = !ext.classList.contains('hidden');
+    if (btn) btn.textContent = isOpen ? '📊 Скрыть статистику' : '📊 Подробная статистика';
+  });
   const btnFs = document.getElementById('btn-fs');
   if (btnFs && !isNativeApp()) {
     bindTap(btnFs, () => {
@@ -141,6 +149,8 @@ function initDom() {
   UI.endTitle = document.getElementById('end-title');
   UI.endDesc = document.getElementById('end-desc');
   UI.endStats = document.getElementById('end-stats');
+  UI.endStatsExt = document.getElementById('end-stats-ext');
+  UI.btnEndStats = document.getElementById('btn-end-stats');
   UI.btnNext = document.getElementById('btn-next');
   UI.btnRestart = document.getElementById('btn-restart');
   UI.btnMenu = document.getElementById('btn-menu');

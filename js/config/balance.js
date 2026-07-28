@@ -12,6 +12,17 @@ export const balance = {
   holder: { max: 5, gap: 20 },
   trafficLight: { redDur: 10, cooldown: 60 },
   overtake: { chance: 0.32 },
+  /** Политика полос v0.4.4.1 (ПДД РФ: не занимать «левую» без нужды) */
+  lanePolicy: {
+    /** Въезд всегда на exitLane (L2), затем merge внутрь */
+    entryOnExitLane: true,
+    /** Сек. между попытками merge L2→L1→L0 */
+    mergeRetry: 0.85,
+    /** Сек. за медленным лидером до разрешения уйти на L2 */
+    overtakePatience: 2.4,
+    /** Шанс начать возврат с L2 при свободных L1/L0 */
+    returnInChance: 0.45
+  },
   visual: { pocketDur: 0.75, pullInDur: 0.7, pullOutDur: 0.65 },
 
   road: {
@@ -220,7 +231,12 @@ export const balance = {
     exitArriveDist: 12,
     exitMaxTime: 35,
     exitStallMax: 1.0,
-    exitMinStep: 3
+    exitMinStep: 3,
+    /**
+     * v0.4.4.1: spawn без АЗС (undercover). Несколько Scalper — только budget.
+     * Спец-despawn без АЗС НЕ вводим — копятся как трафик.
+     */
+    undercoverWithoutStation: true
   },
 
   follow: {
