@@ -1,6 +1,7 @@
 import { CONFIG } from '../config/index.js';
 import { Game } from '../core/gameState.js';
 import { Road } from '../world/roadNetwork.js';
+import { serviceLane, laneLat, normalizeLane } from '../world/lanes.js';
 import { GBRBase } from '../world/map.js';
 import { makeGBR } from '../vehicles/vehicleFactory.js';
 import {
@@ -9,6 +10,7 @@ import {
 import { addFloat } from './economySystem.js';
 import { fmtRubDelta } from '../core/currency.js';
 import { GbrPhase, ScalperPhase, setGbrPhase } from './entityFsm.js';
+import { noteScalperWanted, noteGbrCall } from './runStats.js';
 
 let nextScalperId = 1;
 const MAX_LOG = 60;
@@ -31,13 +33,24 @@ export function ensureScalperId(sc) {
 
 function vehicleWorldPos(v) {
   if (v.pose) return { x: v.pose.x, y: v.pose.y };
-  const lat = v.lane === 'inner' ? Road.laneW / 2 : -Road.laneW / 2;
-  const p = Road.posAt(v.s, lat + (v.latOff || 0));
+  const lat = laneLat(normalizeLane(v.lane)) + (v.latOff || 0);
+  const p = Road.posAt(v.s, lat);
   return { x: p.x, y: p.y };
 }
 
 export function findUnpursuedWantedScalpers() {
   return Game.vehicles.filter(isScalperAssignableWanted);
+}
+
+/** АЗС нужна мигалка «вызови ГБР»: wanted без экипажа, привязанный к слоту. */
+export function stationNeedsGbrCall(slot) {
+  if (!slot || !slot.station) return false;
+  for (const sc of findUnpursuedWantedScalpers()) {
+    if (sc.alarmStationId === slot.i) return true;
+    if (sc.targetSlot === slot || sc.pocketSlot === slot) return true;
+    if (sc.station && sc.station.slot === slot) return true;
+  }
+  return false;
 }
 
 /** Разыскиваемый перекуп, ещё на карте, без экипажа (включая EXITING). */
@@ -189,11 +202,12 @@ export function spawnGbrUnit(cost, msgPos, preferredScalper) {
   const unit = findReadyGbr();
   if (!unit) return null;
   Game.money -= cost;
+  noteGbrCall(cost);
   const g = makeGBR(unit.id);
   g.dispatchedCost = cost;
   g.s = GBRBase.spawnS;
   g.prevS = g.s;
-  g.lane = 'inner';
+  g.lane = serviceLane();
   const speed = gbrPatrolSpeed();
   g.maxV = speed;
   g.v = speed * 0.5;
@@ -245,6 +259,7 @@ export function onScalperTheftDetected(station, scalper) {
   if (station) station.gbrAlarm = 1.5;
   logPursuitEvent('[SCALPER] Theft detected');
   logPursuitEvent('[SCALPER] Wanted = TRUE');
+  noteScalperWanted();
   tryAutoSpawnGbr(station, scalper);
   assignWantedToNearestFreeGbr();
 }

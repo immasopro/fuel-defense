@@ -1,0 +1,126 @@
+{
+  "version": "0.4.4.1",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "id": "VER",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "GameVersion=0.4.4.1"
+    },
+    {
+      "id": "LANES",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "laneCount=3 exit=2 service=0"
+    },
+    {
+      "id": "POLICY-ENTRY",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "entryOnExitLane=true"
+    },
+    {
+      "id": "POLICY-UC",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "undercoverWithoutStation=true"
+    },
+    {
+      "id": "ENTRY-L2",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "lane=2 mergeIn=true"
+    },
+    {
+      "id": "MERGE-START",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "startedShift=true lane=0"
+    },
+    {
+      "id": "MERGE-IN",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "after merge attempts lane=0 mergeIn=false"
+    },
+    {
+      "id": "NO-AZS",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "slots=0"
+    },
+    {
+      "id": "UC-SPAWN",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "spawned id=1 phase=driving"
+    },
+    {
+      "id": "UC-DEFEAT",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "countsForDefeat=true"
+    },
+    {
+      "id": "UC-LOOK",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "wanted=false typeKey=sedan"
+    },
+    {
+      "id": "UC-STATS",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "scalpersSpawned=1"
+    },
+    {
+      "id": "UC-NO-EXIT",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "phase driving→driving after empty tour"
+    },
+    {
+      "id": "MULTI-SC",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "liveScalpers=3 units=3 spawned=3"
+    },
+    {
+      "id": "BUDGET-EQ",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "canSpawnScalper===canSpawnMoreCars (true)"
+    },
+    {
+      "id": "BUDGET-CAP",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "at target live=3 canSpawn=false"
+    },
+    {
+      "id": "PRE-TOUR",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "tourLen=0"
+    },
+    {
+      "id": "POST-TOUR",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "tourLen after build=1"
+    },
+    {
+      "id": "STATS-HTML",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "htmlLen=629"
+    },
+    {
+      "id": "STATS-BTN",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "btn-end-stats present in DOM mock"
+    }
+  ]
+}

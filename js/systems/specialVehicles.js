@@ -1,11 +1,12 @@
 import { CONFIG } from '../config/index.js';
 import { Game } from '../core/gameState.js';
 import { Road, approachStopS, apronPoseForRank, distAhead, distNearStop } from '../world/roadNetwork.js';
+import { serviceLane, exitLane, laneLat, normalizeLane } from '../world/lanes.js';
 import { GBRBase } from '../world/map.js';
 import { mod, rand } from '../core/utils.js';
-import { makeScalper, makeBgCar } from '../vehicles/vehicleFactory.js';
+import { makeScalper, makeBgCar, pickScalperFuel, scalperTourFor } from '../vehicles/vehicleFactory.js';
 import { finishScalperFuel, addFloat, forfeitScalperTheft } from './economySystem.js';
-import { currentSpawnInterval, scalperCooldown } from './spawnSystem.js';
+import { currentSpawnInterval, scalperCooldown, canSpawnScalper, registerSpawnedCar } from './spawnSystem.js';
 import { onHolderChanged, addToHolder } from './trafficSystem.js';
 import { sortedStationSlots } from '../world/map.js';
 import { StationApi } from './stationApi.js';
@@ -13,7 +14,7 @@ import { onGbrMissionComplete, notifyGbrReturning, gbrPatrolSpeed } from './gbrL
 import { currentScalperMaxLiters } from './scalperEvolution.js';
 import { ScalperPhase, GbrPhase, setScalperPhase, setGbrPhase } from './entityFsm.js';
 import { beginPullIn } from '../stations/stationQueue.js';
-import { crossed } from '../vehicles/vehicle.js';
+import { crossed, beginLaneShift, laterallyConflicts, ensureNumericLane } from '../vehicles/vehicle.js';
 import {
   onScalperTheftDetected, getGbrTarget, releaseGbrTarget,
   gbrPursuitTarget, isGbrAssignedTarget, isAssignedScalperOnMap,
@@ -23,6 +24,8 @@ import {
   ScalperOwner, initScalperLifecycle, isStationExitActive, isScalperLeavingMap,
   beginStationExit, handoffScalperToRoad, transferScalperOwner, getScalperOwner
 } from './scalperLifecycle.js';
+import { registerScalper } from './scalperRegistry.js';
+import { noteScalperSpawned, noteScalperArrested } from './runStats.js';
 import { fmtRubDelta } from '../core/currency.js';
 
 
@@ -118,9 +121,10 @@ function updateScalperTour(v, dt, L) {
 
     if (!v.tour.length) {
 
-      beginScalperExit(v, L);
+      // v0.4.4.1: без АЗС — undercover кружит как трафик, НЕ EXITING
+      refreshScalperTour(v);
 
-      return;
+      if (!v.tour.length) return;
 
     }
 
@@ -263,28 +267,183 @@ function scalperOnColumn(sc) {
 
 }
 
-/** Дорожное преследование: та же полоса, сближение до дистанции ареста. */
+/** Дорожное преследование: свободная полоса + подрезание (v0.4.4.2). */
 function applyRoadChasePursuit(g, target, L) {
-  g.lane = target.lane || g.lane || 'inner';
+  ensureNumericLane(g);
+  ensureNumericLane(target);
   g.maxV = Math.max(gbrPatrolSpeed(), CONFIG.scalper.exitSpeed + 10);
-  g.stopS = mod(target.s, L);
+  // Не лочим lane = target.lane — манёвр сам выбирает свободную / полосу для cut-off
+  updateChaseCutOff(g, target, L);
 }
 
+function cutOffCfg() {
+  return CONFIG.gbr.chaseDrive?.cutOff || {};
+}
 
+/** ГБР перекрывает путь перекупу (впереди + lat конфликт / та же полоса). */
+function gbrIsCuttingOff(g, sc, L) {
+  if (!g || !sc) return false;
+  ensureNumericLane(g);
+  ensureNumericLane(sc);
+  const CO = cutOffCfg();
+  const ahead = mod(g.s - sc.s, L); // 0 = совпали; малое = ГБР чуть впереди
+  const maxAhead = CO.blockAheadMax ?? 26;
+  const slop = CO.blockBehindSlop ?? 5;
+  // ahead близко к L значит ГБР чуть сзади
+  const justBehind = ahead > L - slop;
+  const justAhead = ahead >= 0 && ahead <= maxAhead;
+  if (!justAhead && !justBehind) return false;
+  const sameLane = normalizeLane(g.lane) === normalizeLane(sc.lane);
+  if (sameLane || laterallyConflicts(g, sc)) return true;
+  return false;
+}
+
+function laneClearScore(lane, s, len, L, ignoreA, ignoreB) {
+  // Простая оценка «свободно впереди»
+  let best = 1e9;
+  for (const o of Game.vehicles) {
+    if (!o || o === ignoreA || o === ignoreB) continue;
+    if (normalizeLane(o.lane) !== lane) continue;
+    if (o.state !== 'drive' && !(o.kind === 'scalper' && o.scalperPhase === ScalperPhase.EXITING)) continue;
+    const gap = mod(o.s - s, L) - (o.len + len) / 2;
+    if (gap >= -0.05 && gap < best) best = gap;
+  }
+  return best;
+}
+
+/**
+ * Выбор полосы в погоне: к цели / свободнее / для обгона сбоку.
+ * Не телепортирует — только beginLaneShift.
+ */
+function tryChaseLanePick(g, target, L) {
+  if (g.overtake || g.laneChange) return;
+  const CO = cutOffCfg();
+  g.chaseLanePickT = (g.chaseLanePickT || 0);
+  if (g.chaseLanePickT > 0) return;
+  ensureNumericLane(g);
+  ensureNumericLane(target);
+  const tLane = normalizeLane(target.lane);
+  const behind = mod(target.s - g.s, L);
+  const ahead = mod(g.s - target.s, L);
+  const passBehind = CO.passBehind ?? 70;
+  const passAhead = CO.passAhead ?? 16;
+
+  let want = g.lane;
+  // Уже впереди цели — врезаемся в её полосу (подрезание)
+  if (ahead > 0 && ahead < (CO.blockAheadMax ?? 26) + passAhead) {
+    want = tLane;
+  } else if (behind < passBehind) {
+    // Близко сзади: если на той же полосе — уйти в соседнюю для обгона;
+    // если на соседней и почти догнали — готовить cut-in после обгона
+    if (g.lane === tLane) {
+      const n = CONFIG.road?.laneCount ?? 3;
+      const opts = [];
+      const right = tLane + 1;
+      const left = tLane - 1;
+      if (right < n) opts.push(right);
+      if (left >= 0) opts.push(left);
+      let best = null, bestScore = -1;
+      for (const lane of opts) {
+        const sc = laneClearScore(lane, g.s, g.len, L, g, target);
+        if (sc > bestScore) { bestScore = sc; best = lane; }
+      }
+      if (best != null) want = best;
+    } else if (Math.abs(g.lane - tLane) === 1) {
+      // На соседней — остаёмся, пока не выедем вперёд, потом cut-in
+      if (ahead > 0 && ahead < passAhead + 8) want = tLane;
+      else want = g.lane;
+    } else {
+      // Далеко по полосам — шаг к цели
+      want = g.lane + Math.sign(tLane - g.lane);
+    }
+  } else {
+    // Далеко: свободная полоса с уклоном к цели
+    const n = CONFIG.road?.laneCount ?? 3;
+    let best = g.lane, bestScore = laneClearScore(g.lane, g.s, g.len, L, g, target);
+    for (let lane = 0; lane < n; lane++) {
+      if (Math.abs(lane - g.lane) !== 1) continue;
+      let score = laneClearScore(lane, g.s, g.len, L, g, target);
+      if (lane === tLane) score += 30;
+      else if (Math.abs(lane - tLane) < Math.abs(g.lane - tLane)) score += 12;
+      if (score > bestScore) { bestScore = score; best = lane; }
+    }
+    want = best;
+  }
+
+  want = normalizeLane(want);
+  if (want === g.lane) return;
+  if (beginLaneShift(g, want, { dur: (CONFIG.gbr.chaseDrive?.overtakeDur ?? 1.15) * 0.85 })) {
+    g.chaseLanePickT = CO.lanePickRetry ?? 0.35;
+  } else {
+    g.chaseLanePickT = (CO.lanePickRetry ?? 0.35) * 0.5;
+  }
+}
+
+function updateChaseCutOff(g, target, L) {
+  const CO = cutOffCfg();
+  const dt = g._chaseDt || 1 / 30;
+  g.chaseLanePickT = Math.max(0, (g.chaseLanePickT || 0) - dt);
+
+  const behind = mod(target.s - g.s, L);
+  const ahead = mod(g.s - target.s, L);
+  const passAhead = CO.passAhead ?? 16;
+
+  tryChaseLanePick(g, target, L);
+
+  // Цель сзади нас (мы выехали вперёд) — тормозим чуть впереди, перекрывая
+  if (ahead > 0 && ahead < (CO.blockAheadMax ?? 26) + passAhead) {
+    g.stopS = mod(target.s + Math.min(passAhead, Math.max(6, ahead)), L);
+    if (normalizeLane(g.lane) !== normalizeLane(target.lane) && !g.laneChange && !g.overtake) {
+      beginLaneShift(g, normalizeLane(target.lane), {
+        dur: (CONFIG.gbr.chaseDrive?.overtakeDur ?? 1.15) * 0.7,
+        force: true
+      });
+    }
+    if (gbrIsCuttingOff(g, target, L)) {
+      g.cutOffHoldT = (g.cutOffHoldT || 0) + dt;
+      g.v = Math.min(g.v, Math.max(target.v * 0.85, 12));
+    } else {
+      g.cutOffHoldT = Math.max(0, (g.cutOffHoldT || 0) - dt * 0.5);
+    }
+  } else if (behind < (CO.passBehind ?? 70)) {
+    // Догоняем / обходим сбоку — полный газ, без stopS на бампере цели
+    g.stopS = null;
+    g.cutOffHoldT = 0;
+    g.v = Math.max(g.v, g.maxV * 0.55);
+  } else {
+    g.stopS = null;
+    g.cutOffHoldT = 0;
+  }
+}
+
+function gbrCanArrestNow(g, sc) {
+  if (!isGbrAssignedTarget(g, sc) || !isAssignedScalperOnMap(sc)) return false;
+  if (sc.scalperPhase === ScalperPhase.ARRESTING) return false;
+
+  // На колонке — по-прежнему дистанция / подход
+  if (scalperOnColumn(sc)) {
+    return gbrCatchDistance(g, sc) <= CONFIG.gbr.arrestDist;
+  }
+
+  const L = Road.length;
+  const CO = cutOffCfg();
+  const holdNeed = CO.holdSec ?? 0.25;
+  const blocking = gbrIsCuttingOff(g, sc, L);
+  const close = gbrCatchDistance(g, sc) <= CONFIG.gbr.arrestDist;
+
+  // Уже в блоке пути: hold или очень близко (overlap / test fixtures)
+  if (blocking && ((g.cutOffHoldT || 0) >= holdNeed || close)) return true;
+  // Fallback: почти полное перекрытие позиций (регресс / мгновенный catch)
+  if (close && blocking) return true;
+  return false;
+}
 
 function vehicleWorldPos(v) {
-
   if (v.pose) return { x: v.pose.x, y: v.pose.y };
-
-  const lat = v.lane === 'inner' ? Road.laneW / 2 : -Road.laneW / 2;
-
-  const p = Road.posAt(v.s, lat + (v.latOff || 0));
-
+  const lat = laneLat(normalizeLane(v.lane)) + (v.latOff || 0);
+  const p = Road.posAt(v.s, lat);
   return { x: p.x, y: p.y };
-
 }
-
-
 
 function scalperOnMap(sc) {
   return sc && Game.vehicles.includes(sc) &&
@@ -298,8 +457,6 @@ function scalperIsGbrTarget(sc) {
     sc.scalperPhase !== ScalperPhase.EXITING &&
     !!sc.wanted;
 }
-
-
 
 function gbrSeesScalper(g, sc) {
   if (!scalperIsGbrTarget(sc)) return false;
@@ -322,33 +479,16 @@ function gbrTargetsInRange(g) {
   return hits.map(h => h.v);
 }
 
-
-
 function gbrArrestPose(sc) {
-
   const rank = SA.pumpRank(sc.pump, sc);
-
   return apronPoseForRank(sc.targetSlot, sc.pumpJ, rank + 1);
-
 }
-
-
 
 function gbrCatchDistance(g, sc) {
   const pg = vehicleWorldPos(g);
   const ps = vehicleWorldPos(sc);
   return Math.hypot(ps.x - pg.x, ps.y - pg.y);
 }
-
-
-
-function gbrCanArrestNow(g, sc) {
-  if (!isGbrAssignedTarget(g, sc) || !isAssignedScalperOnMap(sc)) return false;
-  if (sc.scalperPhase === ScalperPhase.ARRESTING) return false;
-  return gbrCatchDistance(g, sc) <= CONFIG.gbr.arrestDist;
-}
-
-
 
 function resumeGbrChase(g, L, reason) {
   SA.releaseColumn(g);
@@ -361,7 +501,7 @@ function resumeGbrChase(g, L, reason) {
     g.prevS = g.s;
     g.pose = null;
     g.state = 'drive';
-    g.lane = g.lane || 'inner';
+    g.lane = normalizeLane(g.lane ?? serviceLane());
     g.animT = 0;
     g.animFrom = null;
     g.animTo = null;
@@ -407,7 +547,7 @@ function beginGbrPullIn(g, sc) {
 
   g.animDur = CONFIG.visual.pullInDur + sc.pumpJ * 0.06;
 
-  const lat = Road.laneW / 2 + (g.latOff || 0);
+  const lat = laneLat(serviceLane()) + (g.latOff || 0);
 
   g.animFrom = Road.posAt(g.s, lat);
 
@@ -497,11 +637,20 @@ function startArrest(g, sc) {
   if (g.state === 'drive') g.stopS = g.s;
   g.arrestT = CONFIG.gbr.towTime;
   g.chaseResumeS = null;
+  g.cutOffHoldT = 0;
+  g.overtake = null;
+  g.laneChange = null;
+  g.latOff = 0;
   onGbrArrestStarted(g, sc);
   const onRoad = !sc.pose;
-  if (onRoad) logPursuitEvent('[GBR #' + g.fleetId + '] Road arrest');
-  addFloat(g.pose?.x ?? vehicleWorldPos(g).x, (g.pose?.y ?? vehicleWorldPos(g).y) - 24,
-    'Задержание…', '#42a5f5');
+  if (onRoad) {
+    logPursuitEvent('[GBR #' + g.fleetId + '] Road cut-off arrest');
+    addFloat(g.pose?.x ?? vehicleWorldPos(g).x, (g.pose?.y ?? vehicleWorldPos(g).y) - 24,
+      'Подрезание!', '#42a5f5');
+  } else {
+    addFloat(g.pose?.x ?? vehicleWorldPos(g).x, (g.pose?.y ?? vehicleWorldPos(g).y) - 24,
+      'Задержание…', '#42a5f5');
+  }
 }
 
 
@@ -518,9 +667,9 @@ function beginGbrReturn(g, slot, pumpJ, L) {
     g.state = 'pullOut';
     g.animT = 0;
     g.animDur = CONFIG.visual.pullOutDur + pumpJ * 0.06;
-    g.animFrom = { ...(g.pose || Road.posAt(g.s, Road.laneW / 2)) };
+    g.animFrom = { ...(g.pose || Road.posAt(g.s, laneLat(serviceLane()))) };
     const mergeS = mod(slot.s + 16, L);
-    g.animTo = Road.posAt(mergeS, -Road.laneW / 2);
+    g.animTo = Road.posAt(mergeS, laneLat(exitLane()));
     g.exitS = mergeS;
   } else {
     g.state = 'drive';
@@ -561,6 +710,7 @@ function finishArrest(g, sc, L) {
       fmtRubDelta(pay) + ' оплата перекупа', '#8bc34a');
   }
   forfeitScalperTheft(sc);
+  noteScalperArrested();
 
   SA.releaseColumn(g);
   const arrestedOnStation = !!sc.pose && !!slot;
@@ -573,7 +723,7 @@ function finishArrest(g, sc, L) {
     sc.stationExitActive = false;
     if (!isScalperLeavingMap(sc)) {
       SA.cleanupVehicleStationLinks(sc);
-      sc.lane = 'outer';
+      sc.lane = exitLane();
       sc.scalperLeavingMap = true;
       sc.scalperExitT = 0;
       sc.scalperExitStallT = 0;
@@ -601,7 +751,7 @@ function onGbrReturnPullOutComplete(g, L) {
 
   g.returnPullOut = false;
 
-  g.lane = 'outer';
+  g.lane = exitLane();
 
   g.state = 'drive';
 
@@ -655,10 +805,12 @@ function updateGbrChase(g, sc, dt, L) {
     if (g.targetScalperId != null) releaseGbrTarget(g, { reason: 'despawn' });
     setGbrPhase(g, GbrPhase.PATROL);
     g.stopS = null;
+    g.cutOffHoldT = 0;
     return;
   }
 
   g.chaseTarget = target;
+  g._chaseDt = dt;
 
   if (gbrCanArrestNow(g, target)) {
     startArrest(g, target);
@@ -680,9 +832,10 @@ function updateGBR(g, dt, L, removeSet) {
   if (g.gbrPhase === GbrPhase.RETURNING) {
     g.stopS = GBRBase.spawnS;
     g.maxV = C.returnSpeed;
-    const p = Road.posAt(g.s, 0);
-    const dp = Math.hypot(GBRBase.pos.x - p.x, GBRBase.pos.y - p.y);
-    if (dp < 40 || distAhead(g.s, GBRBase.spawnS, L) < 8) {
+    // Только кольцевая дистанция вперёд до базы.
+    // Евклидово dp<40 давало телепорт: сразу после прохождения базы
+    // GBR ещё геометрически близко, но ringAhead ≈ длина круга (v0.4.3.2).
+    if (distAhead(g.s, GBRBase.spawnS, L) < 8) {
       releaseGbrTarget(g);
       if (g.fleetId) onGbrMissionComplete(g.fleetId);
       removeSet.add(g);
@@ -716,7 +869,7 @@ function updateGBR(g, dt, L, removeSet) {
       SA.releaseColumn(g);
       g.pose = null;
       g.state = 'drive';
-      g.lane = g.lane || 'inner';
+      g.lane = normalizeLane(g.lane ?? serviceLane());
       releaseGbrTarget(g, { reason: 'despawn' });
       setGbrPhase(g, GbrPhase.PATROL);
       g.stopS = null;
@@ -735,6 +888,31 @@ function updateGBR(g, dt, L, removeSet) {
     g.maxV = gbrPatrolSpeed();
     g.stopS = null;
     tickGbrMissionLap(g, L);
+  }
+}
+
+
+
+function refreshScalperTour(sc) {
+  if (!sc || sc.kind !== 'scalper') return;
+  const fuelKey = pickScalperFuel();
+  sc.fuelKey = fuelKey;
+  sc.tour = scalperTourFor(fuelKey);
+  sc.tourIdx = 0;
+}
+
+/** После постройки АЗС — дать undercover tour. */
+function refreshAllUndercoverScalperTours() {
+  for (const v of Game.vehicles) {
+    if (v.kind !== 'scalper') continue;
+    if (v.wanted || v.crimeStarted) continue;
+    if (v.scalperPhase === ScalperPhase.EXITING ||
+        v.scalperPhase === ScalperPhase.DESPAWN ||
+        v.scalperPhase === ScalperPhase.ARRESTING) continue;
+    if (!v.tour || !v.tour.length) refreshScalperTour(v);
+  }
+  for (const v of Game.holder) {
+    if (v.kind === 'scalper' && (!v.tour || !v.tour.length)) refreshScalperTour(v);
   }
 }
 
@@ -760,28 +938,22 @@ function tickSpecialSpawns(dt) {
 
   Game.scalperTimer -= dt;
 
-  if (Game.scalperTimer <= 0 && !Game.scalper.unit) {
-
-    if (sortedStationSlots().length) {
-
+  if (Game.scalperTimer <= 0) {
+    // v0.4.4.1: несколько Scalper — только budget; АЗС не обязательна (undercover).
+    if (canSpawnScalper()) {
       const sc = makeScalper();
       initScalperLifecycle(sc);
       setScalperPhase(sc, ScalperPhase.SPAWN);
-
-      addToHolder(sc, { priority: false, countsForDefeat: false });
-
-      Game.scalper.unit = sc;
-
+      // Undercover = обычный трафик → countsForDefeat true
+      addToHolder(sc, { priority: false, countsForDefeat: true });
+      registerScalper(sc);
+      registerSpawnedCar();
+      noteScalperSpawned();
       setScalperPhase(sc, ScalperPhase.DRIVING);
-
       Game.scalperTimer = scalperCooldown();
-
     } else {
-
       Game.scalperTimer = scalperCooldown();
-
     }
-
   }
 
 }
@@ -800,10 +972,11 @@ function initGbrOnSpawn(g) {
 export {
   updateScalperTour, updateScalperAtColumn, updateScalperWaiting,
   updateGBR, tickSpecialSpawns, initGbrOnSpawn, advanceScalperFromStation,
+  refreshScalperTour, refreshAllUndercoverScalperTours,
   decideAfterArrestExit, onGbrReturnPullOutComplete,
   beginGbrPullIn, tryGbrApproach, scalperIsGbrTarget, scalperOnMap,
   gbrSeesScalper, gbrTargetsInRange, startArrest, tryAttachScalperToStation,
-  gbrCanArrestNow, resumeGbrChase
+  gbrCanArrestNow, resumeGbrChase, gbrIsCuttingOff
 };
 
 

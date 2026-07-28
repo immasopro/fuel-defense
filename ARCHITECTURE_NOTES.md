@@ -27,13 +27,92 @@ ES module live bindings resolve these at call time (no top-level circular init).
 5. **`holderBusy`** — module-level flag kept in `trafficSystem.js` per assignment.
 6. **Headless test** — uses `globalThis.__FD_HEADLESS__` to skip `boot()`; DOM is mocked minimally (no full canvas semantics).
 
+## Patch 0.4.3.3 — Spawned progress, DRAINING, fuel crisis timer
+
+- **Progress** — campaign win gate uses `spawned >= target` + `vehiclesOnMap == 0` (not `served`).
+- **Budget** — Scalper increments `spawned`; no separate last-10/20 Scalper reserve.
+- **DRAINING** — after budget full; existing traffic (incl. Scalper/GBR work) finishes.
+- **Fuel crisis** — 8s timer + warning «Недостаточно топлива…»; cancelled when tanker ordered.
+- **APK** — rebuilt as v0.4.3.3.
+
+## Patch 0.4.3.2 — GBR RETURNING no Euclidean teleport
+
+- **Bug** — after catch just past base, `dp < 40` completed RETURNING while `ringAhead ≈ L` (visual teleport).
+- **Fix** — arrive only when `distAhead(s, GBRBase.spawnS, L) < 8`.
+- **QA** — `docs/QA_0431_GBR_RETURN_AUDIT.md`, `scripts/qa-audit-0431-gbr-return.mjs`.
+- **APK** — rebuilt as v0.4.3.2.
+
+## Patch 0.4.3.1 — GBR base economy rebalance
+
+- **Upgrade costs** — I→II … IX→X: 40k / 100k / 200k / 500k / 700k / 900k / 1.5M / 2.6M / 5M.
+- **Call cost** — table by `ON_MISSION` count (3×5k then 6–20k); RETURNING/PREPARING/READY ignored.
+- **Depart CD** — base 5s; −1s at base levels V, VIII, X (prepDuration unchanged).
+- **APK** — rebuilt as v0.4.3.1.
+
+## Patch 0.4.3 — 2x speed boost + GBR multi-crew logistics
+
+- **2x** — HUD button; 60s real-time budget per level; pause does not consume; `addSpeedBoostTime(seconds)` for future ads (no SDK).
+- **GBR prep** — all crews prepare in parallel (`prepDuration` 20s); post-return prep is per-crew.
+- **Depart cooldown** — global 5s between dispatches (`gbr.departCooldown`).
+- **GBR button** — red + cost when a READY crew can depart; gray «Рейд» / prep / cooldown otherwise.
+- **Return speed** — verified `CONFIG.gbr.returnSpeed === 60` (unchanged); chase speeds untouched.
+- **APK** — rebuilt as v0.4.3.
+
+## Patch 0.4.2.5 — Scalper end-of-level gate + QUEUE lifecycle fix
+
+- **Special spawn limit** — campaign: no new Scalper when `spawned >= target−10` (≤1000) or `target−20` (>1000). Existing Scalper finishes lifecycle.
+- **D-SPAWN-001** — `tickSpecialSpawns` checks `canSpawnScalper()` before create.
+- **D-SPAWN-002** — `releasePocket` / pocket timeout restore `OWNER:SPECIAL` + `PHASE:DRIVING`.
+- **Approach timeout** — `pocketApproachMax` (40s) while driving to pocket.
+- **APK** — rebuilt as v0.4.2.5.
+
+## Patch 0.4.2.4 — GBR base opposite entry + 99% bonus upgrades
+
+- **GBR base** — `GBRBase.init` anchors to `spawnS + L/2` (opposite car entry), not slot midspan.
+- **Depot upgrades** — Нефтебаза / Бензовоз / Автопарк all use the shared bonus payment dialog.
+- **Cap** — bonuses ≤ 99% of upgrade cost; cash ≥ 1% (never zero via rounding).
+- **UI** — shows bonus/cash percentages; explains when the mandatory cash floor blocks purchase.
+- **APK** — rebuilt as v0.4.2.4.
+
+## Patch 0.4.2.3 — Campaign spawn budget = targetCars
+
+- **Rule** — regular client cars: `spawned <= targetCars`; stop spawning when budget reached.
+- **Not served** — spawn gate uses `stats.spawned`, never `stats.served`.
+- **Scalper** — separate spawn path; not in budget / served / win count.
+- **Endless** — no hard spawn budget (`getTargetCars() === null`).
+- **Save** — `spawned` (+ `served`) in run economy snapshot so reload cannot reset the budget.
+- **APK** — rebuilt as v0.4.2.3.
+
+## Patch 0.4.2.2 — Tanker credit restored in order menu
+
+- **Policy** — UI and `callTanker(order)` use existing `canOrderTanker` (after purchase balance ≥ −cost); no new debt cap.
+- **UI** — shows balance / balance-after; debt-limit error instead of cash-only block; confirm enabled when credit allows.
+- **Bonuses** — still not spent on fuel; cashback unchanged.
+- **APK** — rebuilt as v0.4.2.2.
+
+## Patch 0.4.2.1 — Emergency bonus → cash exchange
+
+- **Rate** — fixed 2 bonuses = 1 ₽; three packs only (10k→5k, 50k→25k, 100k→50k).
+- **UI** — tap HUD `★ БОНУСЫ:` → bonus account menu + confirmation dialog.
+- **No shop** — exclusive bonus store deferred; upgrades still up to 100% bonuses (0.4.2).
+- **Save** — money/bonuses snapshotted during play; resume after reload/APK kill for same level.
+- **APK** — rebuilt as v0.4.2.1.
+
+## Patch 0.4.2 — Adaptive UI, bonus HUD, full bonus upgrades
+
+- **UI safe zone** — `#top-bar` hosts menu/help/debug/fs; game canvas in `#stage` is not covered by chrome.
+- **Bonus HUD** — separate `★ БОНУСЫ:` panel; updates on award/spend.
+- **Cashback** — 20–40% → 3%; 50–80% → 5%; 90–100% → 7% of paid fuel cost.
+- **Upgrades** — station/depot may be paid up to 100% with bonuses via payment dialog + slider.
+- **APK** — rebuilt as v0.4.2 with native immersive fullscreen (fs button hidden).
+
 ## Patch 0.4.1 — Flexible fuel order + bonus account
 
 - **Order menu** — tanker button opens non-pausing order UI; slider 20–100% (10% steps).
 - **Pricing** — fixed ₽/L and cashback % per load tier; bonuses = cost × cashback.
 - **Bonuses** — spend on station upgrades (≤30%) and depot capacity (≤20%); not on tanker/fleet/GBR/fuel.
 - **Start money** — 50 000 ₽ for new campaign/endless runs.
-- **Order payment** — menu requires cash ≥ cost (no credit on confirmed orders).
+- **Order payment** — initially cash ≥ cost (credit restored in 0.4.2.2 via `canOrderTanker`).
 
 ## Patch 0.4.0.4 — Assign wanted scalper on GBR spawn
 
@@ -160,3 +239,103 @@ ES module live bindings resolve these at call time (no top-level circular init).
 ## Module assignment summary
 
 See task spec: traffic/spawn/defeat/economy/upgrade/station systems and stationQueue function lists match `gamechunk.js` extraction.
+
+---
+
+## 0.4.4 — Three lanes + collision/follow overhaul (2026-07-27)
+
+### Goals
+1. Road model: **3 full traffic lanes** from level 1 (`CONFIG.laneCount = 3`, configurable for future 4+).
+2. Fix QA 0.4.3.3 CRITICAL/HIGH collision issues without changing economy/spawn/win gates.
+
+### Lane model
+- New `js/world/lanes.js`: `laneCount()`, `laneLat(i)`, `serviceLane()` (=0, AZS approach), `exitLane()` (=N-1), legacy `'inner'|'outer'` normalize.
+- Vehicles store numeric `lane` (0..N-1). `laneList(i)` / `allLaneLists()` / `updateAllLanes(dt)`.
+- Tanker/GBR spawn on `serviceLane()`; random NPC/Scalper pick any free lane via `spawnClear`.
+- **No 4th lane** in this patch. Third lane is not a GBR-only lane.
+
+### Collision / follow fixes
+- **COLL-001:** `findForwardLeader` accepts bumper-boundary leaders (`g >= -0.05`, not `g > 0`). Soft-snap parks at `CONFIG.bumperFloor` (0.75).
+- **COLL-002:** Soft-fix uses **lateral conflict** (`|effectiveLat(a)-effectiveLat(b)| < safeLat`). Step clamped by lateral forward gap so large dt cannot tunnel. Overtake commits to adjacent lane only if clear (`canCommitOvertakeLane`).
+- **Step clamp:** per-tick `|Δs|` capped by `vehicle.len * CONFIG.maxStepLenFrac` and by remaining bumper gap to lateral leader.
+- **EXITING Scalper:** remains in `laneList` while on map (no collision ghost). `updateScalpersLeavingMap` only despawns past `S_END`; motion uses `updateLane`.
+- **Queue/pocket:** spacing `(lenA+lenB)/2 + safetyGap` via `apronPoseForRank` / `pocketPoseForRank` (replaces fixed 21 / 18).
+- Chase overtake pads (`outerAheadPad`/`outerBehindPad`) tightened so GBR does not start an overtake into an occupied lane.
+
+### GBR priority
+- Siren / yield only in **CHASE** (`hasSiren(v)`). PATROL/RETURNING: normal traffic, no yield request.
+- NPC yield: if chase GBR behind with trajectory conflict and right lane free → `beginLaneShift` right.
+- Dense three-abreast still physically blocks GBR (soft-fix + no tunnel).
+
+### Unchanged (regression fence)
+spawnedCars / servedCars / targetCars, DRAINING, fuel crisis, economy, spawn rates, GBR/Scalper balance numbers.
+
+### Debug
+Overlay shows lane, latOff, overtake, bumper, gap, siren, chase phase/target, Scalper EXITING/owner/station; on-car lane digit.
+
+---
+
+## 0.4.4.1 — Entry L2, multi undercover Scalper, end stats (2026-07-28)
+
+### Product decisions (PO)
+1. **Multi-Scalper** — several Scalpers may be live at once; only shared `spawned` budget (`canSpawnScalper`) caps them.
+2. **Undercover** — spawn without AZS; look like NPC until crime/`wanted` at station; `countsForDefeat: true` (player cannot tell); no special undercover despawn — accumulate as traffic.
+3. **Entry** — deploy cars/Scalpers on exit lane (L2), then merge L2→L1→L0 when free; if blocked, stay and retry. L2 is for overtake/jam, not default cruise (ПДД РФ spirit).
+4. **A4** — extended end-level stats button ships in this patch.
+5. Endgate last-10/20 remains **officially abandoned** (0.4.3.3+).
+
+### Implementation
+- `scalperRegistry.js` — `Game.scalper.units[]` + compat `unit`.
+- `specialVehicles.tickSpecialSpawns` — no live-unit gate / no AZS gate; empty tour refreshes or cruises (no forced EXIT).
+- `trafficSystem.deployToRing` — `lanePolicy.entryOnExitLane` → L2 + `mergeIn`.
+- `vehicle.js` — `tryMergeInward`, `tryPreferInnerLanes`, `tickLanePatience` (outward overtake after patience).
+- `runStats.js` — per-level ledger; end screen `#btn-end-stats` / `#end-stats-ext`.
+- Build station → `refreshAllUndercoverScalperTours`.
+
+### QA
+- `scripts/qa-audit-0441-entry-scalper.mjs` → `docs/QA_0441_ENTRY_SCALPER_AUDIT.md`
+- Headless regression block in `test_headless.js` (version + entry/multi/stats).
+
+---
+
+## 0.4.4.2 — CHASE GBR free-lane + cut-off arrest (2026-07-28)
+
+### Goals
+1. CHASE GBR no longer crawls on L0/L1 while flying on L2.
+2. Road arrest reads as a **cut-off** (block the scalper’s path), then ARRESTING.
+
+### Chase driving
+- **Bumper-cap** — `chaseDrive.bumperCapFrac` / `bumperLeadSlack` (was hard `0.35*maxV`).
+- **Overtake pads** — `outerAheadPad/Behind` reduced; real **force** path uses `forceAheadPad/Behind`.
+- **Pass target** — CHASE may overtake the assigned scalper via adjacent lane (was forbidden).
+- **Lane pick** — `applyRoadChasePursuit` no longer sets `lane = target.lane`; `tryChaseLanePick` chooses freer / cut-off lane via `beginLaneShift`.
+
+### Cut-off arrest
+- Road: GBR gets ahead (or overlaps), same lane or lateral conflict → `cutOffHoldT` → `startArrest`.
+- Float «Подрезание!» on road; station path unchanged (distance / column).
+- Euclidean `arrestDist` remains fallback when already blocking + close (tests / overlap).
+
+---
+
+## 0.4.5 — Motion feel + telegraph colors (2026-07-28)
+
+### Goals
+Roadmap segment **A**: less soap motion; diesel/GBR/AZS call cue readable.
+
+### Motion feel (`CONFIG.motionFeel`)
+- Lane/overtake use **commitLaneU** instead of pure `smooth`.
+- Stronger `visualSteer` / `visualRoll`; brake **nose-dip** from Δv (`visualBrakeDip`).
+- Pose uses roll as slight lat bias; draw applies dip scale.
+
+### Colors / chrome lite
+- `fuels.diesel.color` → `#6d4c41`.
+- GBR draw: white body `#f5f7fa` + black roof; CHASE siren kept.
+
+### AZS GBR-call alarm
+- `stationNeedsGbrCall(slot)` — unpursued wanted with `alarmStationId` / station link.
+- `drawGbrCallAlarm` — flashing red/blue bar near slot until pursued.
+
+### QA
+- `scripts/qa-audit-045-motion-telegraph.mjs`
+- Headless block in `test_headless.js`
+

@@ -70,9 +70,25 @@ export const Road = {
 function pumpPose(slot, j) {
   return Road.posAt(slot.s, CONFIG.road.serviceLat + j * CONFIG.road.pumpDepth);
 }
-// Позиция ожидания в очереди на апроне (без «перелёта» по всему кольцу)
-function apronPoseForRank(slot, j, rank) {
-  const back = Math.min(rank * CONFIG.road.queueGap, CONFIG.road.apronDepth);
+// Позиция ожидания в очереди на апроне (spacing по длинам + safety)
+function apronPoseForRank(slot, j, rank, cars) {
+  const safety = CONFIG.road.queueSafetyGap ?? 4;
+  let back = 0;
+  const list = cars || null;
+  if (list && list.length) {
+    for (let i = 1; i <= rank && i < list.length + 1; i++) {
+      const front = list[i - 1];
+      const rear = list[i] || list[Math.min(i, list.length - 1)];
+      const fl = (front && front.len) || 23;
+      const rl = (rear && rear.len) || 23;
+      back += (fl + rl) / 2 + safety;
+    }
+  } else {
+    // fallback без списка: консервативно под фуру
+    const est = 36;
+    back = rank * ((est + est) / 2 + safety);
+  }
+  back = Math.min(back, CONFIG.road.apronDepth);
   return Road.posAt(mod(slot.s - back, Road.length),
     CONFIG.road.serviceLat + j * CONFIG.road.pumpDepth);
 }
@@ -86,9 +102,24 @@ function pocketEntryS(slot) {
 }
 // Точка начала полосы торможения перед АЗС (алиас)
 function decelStopS(slot) { return pocketEntryS(slot); }
-// Позиция в кармане ожидания АЗС (внутри территории, без mod-перелёта)
-function pocketPoseForRank(slot, rank) {
-  const back = Math.min(16 + rank * CONFIG.road.pocketGap, CONFIG.road.pocketDepth);
+// Позиция в кармане ожидания АЗС
+function pocketPoseForRank(slot, rank, cars) {
+  const safety = CONFIG.road.pocketSafetyGap ?? 4;
+  let back = 16;
+  const list = cars || null;
+  if (list && list.length) {
+    for (let i = 1; i <= rank; i++) {
+      const front = list[i - 1];
+      const rear = list[i] || list[Math.min(i, list.length - 1)];
+      const fl = (front && front.len) || 23;
+      const rl = (rear && rear.len) || 23;
+      back += (fl + rl) / 2 + safety;
+    }
+  } else {
+    const est = 36;
+    back = 16 + rank * ((est + est) / 2 + safety);
+  }
+  back = Math.min(back, CONFIG.road.pocketDepth);
   return Road.posAt(mod(slot.s - back, Road.length), CONFIG.road.pocketLat);
 }
 // Позиция в накопителе перед светофором

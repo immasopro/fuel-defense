@@ -1,0 +1,54 @@
+{
+  "version": "0.4.5",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "id": "VER",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "GameVersion=0.4.5"
+    },
+    {
+      "id": "DT-COLOR",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "diesel=#6d4c41"
+    },
+    {
+      "id": "MF-CFG",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "laneSteer=0.32"
+    },
+    {
+      "id": "STEER",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "max|steer|=0.312"
+    },
+    {
+      "id": "ROLL",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "roll=0.000"
+    },
+    {
+      "id": "GBR-DRAW",
+      "severity": "HIGH",
+      "ok": true,
+      "detail": "drawVehicle(gbr) ok"
+    },
+    {
+      "id": "ALARM-ON",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "needs call when unpursued"
+    },
+    {
+      "id": "ALARM-OFF",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "clears when pursued"
+    }
+  ]
+}

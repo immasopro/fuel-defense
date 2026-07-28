@@ -10,6 +10,9 @@ import { isLightGreen } from '../systems/trafficSystem.js';
 import { getServedHudText } from '../systems/spawnSystem.js';
 import { UI } from './hud.js';
 import { drawDebugOverlay } from '../debug/debugOverlay.js';
+import { laneLat, normalizeLane, serviceLane, exitLane, isExitLane, roadStrokeWidth, laneCount } from '../world/lanes.js';
+import { hasSiren } from '../vehicles/vehicle.js';
+import { stationNeedsGbrCall } from '../systems/gbrPursuit.js';
 
 function vehiclePose(v) {
   if (v.kind === 'gbr' && v.pose) return v.pose;
@@ -18,8 +21,10 @@ function vehiclePose(v) {
     return lerpPose(v.animFrom, v.animTo, smooth(clamp01(v.animT / v.animDur)));
   if (v.state === 'station' || v.state === 'block' || v.state === 'waitMerge' || v.state === 'pocket')
     return v.pose;
-  const baseLat = v.lane === 'inner' ? Road.laneW / 2 : -Road.laneW / 2;
-  const lat = v.lane === 'inner' ? baseLat + (v.latOff || 0) : baseLat;
+  const baseLat = laneLat(normalizeLane(v.lane));
+  // visualRoll: лёгкий «крен» как доп. lat-смещение к центру поворота
+  const roll = v.visualRoll || 0;
+  const lat = baseLat + (v.latOff || 0) + roll * 2.2;
   const p = Road.posAt(v.s, lat);
   if (v.visualSteer) p.a += v.visualSteer;
   return p;
@@ -155,11 +160,11 @@ function draw() {
 
   // --- дорога ---
   roadPath(ctx);
-  ctx.lineWidth = lw * 2 + 8;
+  ctx.lineWidth = roadStrokeWidth() + 6;
   ctx.strokeStyle = COLORS.roadEdge;
   ctx.stroke();
   roadPath(ctx);
-  ctx.lineWidth = lw * 2 + 2;
+  ctx.lineWidth = roadStrokeWidth();
   ctx.strokeStyle = COLORS.road;
   ctx.stroke();
   roadPath(ctx);
@@ -169,12 +174,32 @@ function draw() {
   ctx.stroke();
   ctx.setLineDash([]);
 
+  // разметка между полосами (v0.4.4)
+  const nLanes = laneCount();
+  if (nLanes > 1) {
+    ctx.strokeStyle = 'rgba(255,235,59,.35)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([10, 12]);
+    for (let i = 1; i < nLanes; i++) {
+      const lat = (laneLat(i - 1) + laneLat(i)) / 2;
+      roadPath(ctx);
+      // approximate: stroke full path is centerline; draw offset marks along ring
+      for (let s = 0; s < Road.length; s += 28) {
+        const p = Road.posAt(s, lat);
+        if (s === 0) { ctx.beginPath(); ctx.moveTo(p.x, p.y); }
+        else ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
   drawDepotBranchRoad(ctx);
 
   // стрелки направления на внутренней полосе
   ctx.fillStyle = 'rgba(230,237,243,.3)';
   for (let s = 20; s < Road.length; s += 110) {
-    const p = Road.posAt(s, lw / 2);
+    const p = Road.posAt(s, laneLat(serviceLane()));
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.rotate(p.a);
@@ -187,7 +212,7 @@ function draw() {
 
   // индикатор таймера поражения
   if (Game.defeatT > 0.15 && Math.floor(Game.time * 4) % 2 === 0) {
-    const p = Road.posAt(Road.spawnS, lw / 2);
+    const p = Road.posAt(Road.spawnS, laneLat(serviceLane()));
     ctx.fillStyle = 'rgba(239,83,80,.5)';
     ctx.beginPath();
     ctx.arc(p.x, p.y, 16, 0, Math.PI * 2);
@@ -369,10 +394,10 @@ function drawSlot(ctx, slot) {
   const entryS = pocketEntryS(slot);
   const decS = mod(entryS - CONFIG.road.decelLen * 0.45, Road.length);
   const accS = mod(slot.s + CONFIG.road.accelLen, Road.length);
-  const d0 = Road.posAt(decS, laneW / 2), d1 = Road.posAt(entryS, laneW / 2 + 5);
-  const d2 = Road.posAt(approachStopS(slot), laneW / 2 + 8);
-  const a1 = Road.posAt(mod(slot.s + 6, Road.length), -laneW / 2 - 3);
-  const a2 = Road.posAt(accS, -laneW / 2 - 3);
+  const d0 = Road.posAt(decS, laneLat(serviceLane())), d1 = Road.posAt(entryS, laneLat(serviceLane()) + 5);
+  const d2 = Road.posAt(approachStopS(slot), laneLat(serviceLane()) + 8);
+  const a1 = Road.posAt(mod(slot.s + 6, Road.length), laneLat(exitLane()) - 3);
+  const a2 = Road.posAt(accS, laneLat(exitLane()) - 3);
   ctx.lineWidth = 3;
   ctx.setLineDash([6, 6]);
   ctx.strokeStyle = 'rgba(141,198,63,.5)';
@@ -432,6 +457,35 @@ function drawSlot(ctx, slot) {
   }
 
   drawStationTank(ctx, slot, st);
+  drawGbrCallAlarm(ctx, slot);
+}
+
+/** Мигающая мигалка у АЗС — нужен вызов ГБР (v0.4.5). */
+function drawGbrCallAlarm(ctx, slot) {
+  if (!stationNeedsGbrCall(slot)) return;
+  const p = slot.pos;
+  if (!p) return;
+  const blink = Math.floor(Game.time * 6) % 2 === 0;
+  const pulse = 1 + Math.sin(Game.time * 9) * 0.12;
+  const ox = p.x + Math.cos(p.a - Math.PI / 2) * 28;
+  const oy = p.y + Math.sin(p.a - Math.PI / 2) * 28;
+  ctx.save();
+  ctx.translate(ox, oy);
+  ctx.globalAlpha = blink ? 1 : 0.45;
+  // «люстра» мигалки
+  ctx.fillStyle = '#eceff1';
+  rr(ctx, -7 * pulse, -4, 14 * pulse, 8, 2);
+  ctx.fill();
+  ctx.fillStyle = blink ? '#ef5350' : '#42a5f5';
+  ctx.beginPath();
+  ctx.arc(-3, 0, 3.2 * pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = blink ? '#42a5f5' : '#ef5350';
+  ctx.beginPath();
+  ctx.arc(3, 0, 3.2 * pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.globalAlpha = 1;
 }
 
 function drawTrafficLightIndicator(ctx, x, y) {
@@ -477,7 +531,13 @@ function drawVehicle(ctx, v) {
   ctx.save();
   ctx.translate(p.x, p.y);
   ctx.rotate(p.a);
-  if (v.lane === 'outer' && v.kind === 'car') ctx.globalAlpha = .85;
+  // v0.4.5: клевок при торможении — сдвиг массы вперёд + лёгкое сжатие
+  const dip = clamp01(v.visualBrakeDip || 0);
+  if (dip > 0.02) {
+    ctx.translate(dip * 1.8, 0);
+    ctx.scale(1 - dip * 0.1, 1 + dip * 0.05);
+  }
+  if (isExitLane(normalizeLane(v.lane)) && v.kind === 'car') ctx.globalAlpha = .85;
 
   if (v.kind === 'tanker') {
     ctx.fillStyle = '#8d6e63';                       // кабина
@@ -490,12 +550,21 @@ function drawVehicle(ctx, v) {
     const k = v.load / (v.capacity || Depot.cap());
     ctx.fillRect(-v.len / 2 + 3, -1.5, (v.len - 18) * k, 3);
   } else if (v.kind === 'gbr') {
-    ctx.fillStyle = '#37474f';
+    // v0.4.5: белый кузов + чёрная крыша
+    ctx.fillStyle = '#f5f7fa';
     rr(ctx, -v.len / 2, -v.w / 2, v.len, v.w, 3);
     ctx.fill();
-    const blink = Math.floor(Game.time * 10) % 2 === 0;   // мигалка
-    ctx.fillStyle = blink ? '#ef5350' : '#42a5f5';
-    ctx.fillRect(-3, -v.w / 2 - 1, 6, 3);
+    ctx.fillStyle = '#1a1d24';
+    rr(ctx, -v.len * 0.12, -v.w / 2, v.len * 0.55, v.w, 2);
+    ctx.fill();
+    // лобовое
+    ctx.fillStyle = 'rgba(66,165,245,.35)';
+    ctx.fillRect(v.len / 2 - 7, -v.w / 2 + 1.5, 4, v.w - 3);
+    if (hasSiren(v)) {
+      const blink = Math.floor(Game.time * 10) % 2 === 0;
+      ctx.fillStyle = blink ? '#ef5350' : '#42a5f5';
+      ctx.fillRect(-3, -v.w / 2 - 1, 6, 3);
+    }
   } else {
     const isRevealedScalper = v.kind === 'scalper' && !!v.wanted;
     const color = isRevealedScalper ? CONFIG.scalper.color
@@ -546,7 +615,7 @@ function drawVehicle(ctx, v) {
     ctx.font = '700 9px system-ui';
     ctx.fillStyle = v.fuelKey ? CONFIG.fuels[v.fuelKey].color : '#ce93d8';
     ctx.fillText(fuel, p.x, p.y - 21);
-  } else if (v.angry && v.state === 'drive' && v.lane === 'inner') {
+  } else if (v.angry && v.state === 'drive' && normalizeLane(v.lane) === serviceLane()) {
     ctx.fillStyle = '#ef5350';
     ctx.font = '800 12px system-ui';
     ctx.textAlign = 'center';
