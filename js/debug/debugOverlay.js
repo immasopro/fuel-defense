@@ -11,6 +11,10 @@ import {
 } from '../systems/gbrPursuit.js';
 import { scalperOwnerLogLines, scalperMovementDebug } from '../systems/scalperLifecycle.js';
 import { clamp01, smooth, lerpPose } from '../core/utils.js';
+import { laneLat, normalizeLane, laneCount } from '../world/lanes.js';
+import { findForwardLeader, hasSiren, bumperFloor } from '../vehicles/vehicle.js';
+import { laneList } from '../systems/trafficSystem.js';
+import { mod } from '../core/utils.js';
 
 let enabled = false;
 
@@ -30,8 +34,8 @@ function vehiclePose(v) {
     return lerpPose(v.animFrom, v.animTo, smooth(clamp01(v.animT / v.animDur)));
   if (v.state === 'station' || v.state === 'block' || v.state === 'waitMerge' || v.state === 'pocket')
     return v.pose;
-  const baseLat = v.lane === 'inner' ? Road.laneW / 2 : -Road.laneW / 2;
-  const lat = v.lane === 'inner' ? baseLat + (v.latOff || 0) : baseLat;
+  const baseLat = laneLat(normalizeLane(v.lane));
+  const lat = baseLat + (v.latOff || 0);
   const p = Road.posAt(v.s, lat);
   if (v.visualSteer) p.a += v.visualSteer;
   return p;
@@ -115,17 +119,41 @@ function tankerLines(v) {
 }
 
 function unitLines(v) {
-  if (v.kind === 'tanker') return tankerLines(v);
+  const L = Road.length;
+  const lane = normalizeLane(v.lane);
+  const list = laneList(lane);
+  const { leader, gap } = findForwardLeader(list, v, L);
+  const common = [
+    (v.kind || 'car') + '#' + (v.fleetId || v.scalperId || (v.id != null ? v.id : '?')),
+    'L:' + lane + '/' + laneCount() + ' st:' + (v.state || '—'),
+    's:' + Math.round(v.s) + ' len:' + Math.round(v.len) + ' lat:' + (v.latOff || 0).toFixed(1),
+    'ov:' + (v.overtake || (v.laneChange ? 'LC' + v.laneChange.to : '—')) +
+      ' gap:' + (leader ? gap.toFixed(1) : '∞')
+  ];
+  if (v.kind === 'tanker') return tankerLines(v).concat(common.slice(1, 3));
   if (v.kind === 'gbr') {
     const label = gbrLabel(v);
     const target = v.targetScalperId != null ? 'sc#' + v.targetScalperId : 'sc#—';
     const dist = gbrDistanceToTarget(v);
     const distStr = dist != null ? Math.round(dist) + 'px' : '—';
-    return [label, 'gbr#' + (v.fleetId || '?'), target, 'dist:' + distStr];
+    return [
+      label + ' gbr#' + (v.fleetId || '?'),
+      'siren:' + (hasSiren(v) ? 'ON' : 'off') + ' ' + target + ' d:' + distStr,
+      'L:' + lane + '→' + (v.overtakeToLane != null ? v.overtakeToLane : '—') +
+        ' ov:' + (v.overtake || '—'),
+      's:' + Math.round(v.s) + ' gap:' + (leader ? gap.toFixed(1) : '∞')
+    ];
   }
-  if (v.kind === 'scalper') return scalperLines(v);
-  const label = unitLabel(v);
-  return label ? [label] : null;
+  if (v.kind === 'scalper') {
+    const d = scalperMovementDebug(v);
+    return [
+      'SC#' + (v.scalperId || '?') + ' ' + d.phase,
+      'own:' + d.owner + ' exit:' + (v.scalperPhase === ScalperPhase.EXITING ? 'Y' : 'N'),
+      'L:' + lane + ' tgt:' + (v.targetSlot ? 'st#' + v.targetSlot.i : '—'),
+      's:' + Math.round(v.s) + ' gap:' + (leader ? gap.toFixed(1) : '∞')
+    ];
+  }
+  return common;
 }
 
 function drawStationGuardPanel(ctx) {
@@ -167,8 +195,13 @@ export function drawDebugOverlay(ctx) {
     const y2 = pose.y - 34 - (lines.length - 1) * lineH;
     ctx.fillStyle = 'rgba(0,0,0,.72)';
     ctx.fillRect(x, y2, w, h);
-    ctx.fillStyle = v.kind === 'gbr' ? '#81d4fa' : v.kind === 'tanker' ? '#fff59d' : '#ce93d8';
+    ctx.fillStyle = v.kind === 'gbr' ? '#81d4fa' : v.kind === 'tanker' ? '#fff59d' : v.kind === 'scalper' ? '#ce93d8' : '#cfd8dc';
     lines.forEach((line, i) => ctx.fillText(line, pose.x, y2 + pad + 9 + i * lineH));
+    // номер полосы у бампера
+    ctx.fillStyle = '#ffeb3b';
+    ctx.font = '800 10px system-ui';
+    ctx.fillText('L' + normalizeLane(v.lane), pose.x, pose.y + 16);
+    ctx.font = '700 9px system-ui';
   }
   ctx.restore();
 }

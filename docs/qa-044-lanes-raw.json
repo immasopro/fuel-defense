@@ -1,0 +1,382 @@
+{
+  "version": "0.4.4",
+  "generatedAt": "2026-07-27T13:58:59.347Z",
+  "laneCount": 3,
+  "findings": [
+    {
+      "id": "VER-01",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "GameVersion=0.4.4"
+    },
+    {
+      "id": "LANE-CFG-01",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "laneCount param=3 api=3 (must be 3, no 4th)"
+    },
+    {
+      "id": "LANE-CFG-02",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "serviceLane=0 exitLane=2"
+    },
+    {
+      "id": "LANE-CFG-03",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "laneLat: 0=15.0 1=0.0 2=-15.0"
+    },
+    {
+      "id": "COLL-001",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "lostLeader=false tunneled=false minGap=0.75 floor=0.75",
+      "lostLeader": false,
+      "tunneled": false,
+      "minGap": 0.75
+    },
+    {
+      "id": "COLL-002",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "chase overtake latConflict minGap=1.50 bodyOverlap=0.00 deepNeg=false",
+      "minG": 1.5,
+      "deepNeg": false,
+      "maxBody": 0
+    },
+    {
+      "id": "EXIT-JUMP",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "no large per-tick jump (watched 100 ticks)"
+    },
+    {
+      "id": "EXIT-GHOST",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "inLaneList=true tunneled=false minGap=7.01 ds=32.0",
+      "inList": true,
+      "tunneled": false,
+      "minGap": 7.0076547799881155
+    },
+    {
+      "id": "MAT-NPC-NPC-L0",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "NPC→stopped NPC worstOverlap=0.00",
+      "worst": 0,
+      "lane": 0
+    },
+    {
+      "id": "MAT-SC-NPC-L0",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Scalper→stopped NPC worstOverlap=0.00",
+      "worst": 0,
+      "lane": 0
+    },
+    {
+      "id": "MAT-NPC-SC-L0",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "NPC→stopped Scalper worstOverlap=0.00",
+      "worst": 0,
+      "lane": 0
+    },
+    {
+      "id": "MAT-NPC-GBR-L0",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "NPC→stopped PATROL GBR worstOverlap=0.00",
+      "worst": 0,
+      "lane": 0
+    },
+    {
+      "id": "MAT-SC-GBR-L0",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Scalper→stopped RETURNING GBR worstOverlap=0.00",
+      "worst": 0,
+      "lane": 0
+    },
+    {
+      "id": "MAT-NPC-NPC-L1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "NPC→stopped NPC worstOverlap=0.00",
+      "worst": 0,
+      "lane": 1
+    },
+    {
+      "id": "MAT-SC-NPC-L1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Scalper→stopped NPC worstOverlap=0.00",
+      "worst": 0,
+      "lane": 1
+    },
+    {
+      "id": "MAT-NPC-SC-L1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "NPC→stopped Scalper worstOverlap=0.00",
+      "worst": 0,
+      "lane": 1
+    },
+    {
+      "id": "MAT-NPC-GBR-L1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "NPC→stopped PATROL GBR worstOverlap=0.00",
+      "worst": 0,
+      "lane": 1
+    },
+    {
+      "id": "MAT-SC-GBR-L1",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Scalper→stopped RETURNING GBR worstOverlap=0.00",
+      "worst": 0,
+      "lane": 1
+    },
+    {
+      "id": "MAT-NPC-NPC-L2",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "NPC→stopped NPC worstOverlap=0.00",
+      "worst": 0,
+      "lane": 2
+    },
+    {
+      "id": "MAT-SC-NPC-L2",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Scalper→stopped NPC worstOverlap=0.00",
+      "worst": 0,
+      "lane": 2
+    },
+    {
+      "id": "MAT-NPC-SC-L2",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "NPC→stopped Scalper worstOverlap=0.00",
+      "worst": 0,
+      "lane": 2
+    },
+    {
+      "id": "MAT-NPC-GBR-L2",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "NPC→stopped PATROL GBR worstOverlap=0.00",
+      "worst": 0,
+      "lane": 2
+    },
+    {
+      "id": "MAT-SC-GBR-L2",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "Scalper→stopped RETURNING GBR worstOverlap=0.00",
+      "worst": 0,
+      "lane": 2
+    },
+    {
+      "id": "GBR-CHASE-NPC",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "CHASE GBR vs stopped NPC (right blocked) worstOverlap=0.00",
+      "worst": 0
+    },
+    {
+      "id": "GBR-SC-20",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "passThrough assigned Scalper: 0/20",
+      "passThrough": 0
+    },
+    {
+      "id": "SIREN-PATROL",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "PATROL siren off"
+    },
+    {
+      "id": "SIREN-RET",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "RETURNING siren off"
+    },
+    {
+      "id": "SIREN-CHASE",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "CHASE siren on"
+    },
+    {
+      "id": "YIELD-FREE",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "CHASE behind + right free → yield laneChange=true to=1",
+      "yielded": true
+    },
+    {
+      "id": "YIELD-BLOCKED",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "right occupied → no yield (laneChange=false)"
+    },
+    {
+      "id": "YIELD-PATROL",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "PATROL GBR does not trigger yield"
+    },
+    {
+      "id": "SHIFT-01",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "beginLaneShift starts transition (not instant): lane=0 hasLC=true"
+    },
+    {
+      "id": "SHIFT-02",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "after dur lane committed to 1 (lane=1 lc=false)"
+    },
+    {
+      "id": "SHIFT-23",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "1→2→3 path ends lane=2"
+    },
+    {
+      "id": "SHIFT-32",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "3→2 path ends lane=1"
+    },
+    {
+      "id": "JAM-01",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "3-abreast jam: worstOverlap=0.00 passedWall=false",
+      "worst": 0,
+      "passedWall": false
+    },
+    {
+      "id": "QUEUE-sedan-sedan",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "apron sep=23.0 need≥23.0"
+    },
+    {
+      "id": "QUEUE-suv-suv",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "apron sep=27.0 need≥27.0"
+    },
+    {
+      "id": "QUEUE-truck-truck",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "apron sep=40.0 need≥40.0"
+    },
+    {
+      "id": "QUEUE-truck-sedan",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "apron sep=31.5 need≥31.5"
+    },
+    {
+      "id": "QUEUE-sedan-truck",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "apron sep=31.5 need≥31.5"
+    },
+    {
+      "id": "QUEUE-scalper-truck",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "apron Scalper→truck sep=33.5 need≥33.5"
+    },
+    {
+      "id": "POCKET-truck-truck",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "pocket sep=40.0 need≥40.0"
+    },
+    {
+      "id": "SPAWN-BLOCK-L0",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "lane 0 blocked at spawn clear=false"
+    },
+    {
+      "id": "SPAWN-BLOCK-L1",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "lane 1 blocked at spawn clear=false"
+    },
+    {
+      "id": "SPAWN-BLOCK-L2",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "lane 2 blocked at spawn clear=false"
+    },
+    {
+      "id": "SPAWN-PICK",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "pickSpawnLane prefers free lane: picks=2"
+    },
+    {
+      "id": "FPS-60",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "dt=1/60 overlaps=0 depth=0.00"
+    },
+    {
+      "id": "FPS-20",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "dt=0.05 overlaps=0 depth=0.00"
+    },
+    {
+      "id": "FPS-SENS",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "depth Δ 60vs20fps=0.00"
+    },
+    {
+      "id": "FPS-BIG",
+      "severity": "INFO",
+      "ok": true,
+      "detail": "dt=0.2 (uncapped stress) depth=0.00 overlaps=0"
+    },
+    {
+      "id": "REG-SPAWN",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "Economy/spawn configs present (lane patch must not strip them)"
+    },
+    {
+      "id": "REG-NO4",
+      "severity": "CRITICAL",
+      "ok": true,
+      "detail": "No 4th lane in 0.4.4"
+    }
+  ],
+  "dens60": {
+    "overlaps": 0,
+    "maxDepth": 0
+  },
+  "dens20": {
+    "overlaps": 0,
+    "maxDepth": 0
+  },
+  "densBig": {
+    "overlaps": 0,
+    "maxDepth": 0
+  },
+  "blockers": []
+}
